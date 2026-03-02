@@ -62,7 +62,7 @@ void test_int_array() {
     CHECK_EQ(e0->is_int(), false);
     CHECK_EQ(e0->is_uint(), false);
     CHECK_EQ(e0->is_double(), false);
-    CHECK_EQ(e0->is_string_like(), false);
+    CHECK_EQ(e0->is_string(), false);
     CHECK_EQ(e0->is_object(), false);
     CHECK_EQ(e0->has_metadata(), false);
     CHECK_EQ(e0->is_array(), true);
@@ -80,7 +80,7 @@ void test_string_array() {
     CHECK_EQ(e0->is_int(), false);
     CHECK_EQ(e0->is_uint(), false);
     CHECK_EQ(e0->is_double(), false);
-    CHECK_EQ(e0->is_string_like(), false);
+    CHECK_EQ(e0->is_string(), false);
     CHECK_EQ(e0->is_object(), false);
     CHECK_EQ(e0->has_metadata(), false);
     CHECK_EQ(e0->is_array(), true);
@@ -98,7 +98,7 @@ void test_sv_array() {
     CHECK_EQ(e0->is_int(), false);
     CHECK_EQ(e0->is_uint(), false);
     CHECK_EQ(e0->is_double(), false);
-    CHECK_EQ(e0->is_string_like(), false);
+    CHECK_EQ(e0->is_string(), false);
     CHECK_EQ(e0->is_object(), false);
     CHECK_EQ(e0->has_metadata(), false);
     CHECK_EQ(e0->is_array(), true);
@@ -116,7 +116,7 @@ void test_metadata_int_string() {
     CHECK_EQ(e0->is_int(), true);
     CHECK_EQ(e0->is_uint(), false);
     CHECK_EQ(e0->is_double(), false);
-    CHECK_EQ(e0->is_string_like(), false);
+    CHECK_EQ(e0->is_string(), false);
     CHECK_EQ(e0->is_object(), false);
     CHECK_EQ(e0->has_metadata(), false);
     CHECK_EQ(e0->is_array(), false);
@@ -126,7 +126,7 @@ void test_metadata_int_string() {
     CHECK_EQ(e1->is_int(), false);
     CHECK_EQ(e1->is_uint(), false);
     CHECK_EQ(e1->is_double(), false);
-    CHECK_EQ(e1->is_string_like(), true);
+    CHECK_EQ(e1->is_string(), true);
     CHECK_EQ(e1->is_object(), false);
     CHECK_EQ(e1->has_metadata(), false);
     CHECK_EQ(e1->is_array(), false);
@@ -144,7 +144,7 @@ void test_metadata_nested() {
     CHECK_EQ(e0->is_int(), true);
     CHECK_EQ(e0->is_uint(), false);
     CHECK_EQ(e0->is_double(), false);
-    CHECK_EQ(e0->is_string_like(), false);
+    CHECK_EQ(e0->is_string(), false);
     CHECK_EQ(e0->is_object(), false);
     CHECK_EQ(e0->has_metadata(), false);
     CHECK_EQ(e0->is_array(), false);
@@ -154,7 +154,7 @@ void test_metadata_nested() {
     CHECK_EQ(e1->is_int(), false);
     CHECK_EQ(e1->is_uint(), false);
     CHECK_EQ(e1->is_double(), false);
-    CHECK_EQ(e1->is_string_like(), false);
+    CHECK_EQ(e1->is_string(), false);
     CHECK_EQ(e1->is_object(), false);
     CHECK_EQ(e1->has_metadata(), true);
     CHECK_EQ(e1->is_array(), false);
@@ -164,7 +164,7 @@ void test_metadata_nested() {
     CHECK_EQ(e2->is_int(), false);
     CHECK_EQ(e2->is_uint(), false);
     CHECK_EQ(e2->is_double(), false);
-    CHECK_EQ(e2->is_string_like(), true);
+    CHECK_EQ(e2->is_string(), true);
     CHECK_EQ(e2->is_object(), false);
     CHECK_EQ(e2->has_metadata(), false);
     CHECK_EQ(e2->is_array(), false);
@@ -182,7 +182,7 @@ void test_metadata_nested_with_array() {
     CHECK_EQ(e0->is_int(), false);
     CHECK_EQ(e0->is_uint(), false);
     CHECK_EQ(e0->is_double(), false);
-    CHECK_EQ(e0->is_string_like(), false);
+    CHECK_EQ(e0->is_string(), false);
     CHECK_EQ(e0->is_object(), false);
     CHECK_EQ(e0->has_metadata(), true);
     CHECK_EQ(e0->is_array(), false);
@@ -192,7 +192,7 @@ void test_metadata_nested_with_array() {
     CHECK_EQ(e1->is_int(), false);
     CHECK_EQ(e1->is_uint(), false);
     CHECK_EQ(e1->is_double(), false);
-    CHECK_EQ(e1->is_string_like(), false);
+    CHECK_EQ(e1->is_string(), false);
     CHECK_EQ(e1->is_object(), false);
     CHECK_EQ(e1->has_metadata(), false);
     CHECK_EQ(e1->is_array(), true);
@@ -207,14 +207,14 @@ void test_metadata_result_t() {
 
     const auto *e_symbol = m.get("symbol");
     CHECK(e_symbol);
-    CHECK_EQ(e_symbol->is_string_like(), true);
+    CHECK_EQ(e_symbol->is_string(), true);
     CHECK_EQ(e_symbol->is_int(), false);
     CHECK_EQ(e_symbol->is_array(), false);
 
     const auto *e_pmid = m.get("preventedMatchId");
     CHECK(e_pmid);
     CHECK_EQ(e_pmid->is_int(), true);
-    CHECK_EQ(e_pmid->is_string_like(), false);
+    CHECK_EQ(e_pmid->is_string(), false);
 
     const auto *e_toid = m.get("takerOrderId");
     CHECK(e_toid);
@@ -230,15 +230,15 @@ void test_metadata_result_t() {
 
     const auto *e_stpm = m.get("selfTradePreventionMode");
     CHECK(e_stpm);
-    CHECK_EQ(e_stpm->is_string_like(), true);
+    CHECK_EQ(e_stpm->is_string(), true);
 
     const auto *e_price = m.get("price");
     CHECK(e_price);
-    CHECK_EQ(e_price->is_string_like(), true);
+    CHECK_EQ(e_price->is_string(), true);
 
     const auto *e_mpq = m.get("makerPreventedQuantity");
     CHECK(e_mpq);
-    CHECK_EQ(e_mpq->is_string_like(), true);
+    CHECK_EQ(e_mpq->is_string(), true);
 
     const auto *e_tt = m.get("transactTime");
     CHECK(e_tt);
@@ -256,11 +256,11 @@ void test_metadata_rate_limits_t() {
 
     const auto *e_rlt = m.get("rateLimitType");
     CHECK(e_rlt);
-    CHECK_EQ(e_rlt->is_string_like(), true);
+    CHECK_EQ(e_rlt->is_string(), true);
 
     const auto *e_int = m.get("interval");
     CHECK(e_int);
-    CHECK_EQ(e_int->is_string_like(), true);
+    CHECK_EQ(e_int->is_string(), true);
 
     const auto *e_inum = m.get("intervalNum");
     CHECK(e_inum);
@@ -296,7 +296,7 @@ void test_metadata_response_t() {
 
     const auto *e_id = m.get("id");
     CHECK(e_id);
-    CHECK_EQ(e_id->is_string_like(), true);
+    CHECK_EQ(e_id->is_string(), true);
 
     const auto *e_st = m.get("status");
     CHECK(e_st);
@@ -395,8 +395,8 @@ void test_dump() {
     };
     // declaration order
     const expected_member expected[] = {
-         {0x37386ae0, "id",          'S'}
-        ,{0xba4b77ef, "status",      'I'}
+         {0x37386ae0, "id",          'V'}
+        ,{0xba4b77ef, "status",      'U'}
         ,{0x6c4f4af5, "results",     'A'}
         ,{0xdb31ea38, "rate_limits", 'A'}
         ,{0xd665d9e9, "headers",     'O'}
@@ -582,8 +582,7 @@ bool test_parse_int_array() {
     const auto json = R"({"arr":[3, 2, 1, 4, 5, 6]})";
     int_array obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.arr.size(), 6u);
     CHECK_EQ(obj.arr[0], 3);
     CHECK_EQ(obj.arr[1], 2);
@@ -598,8 +597,7 @@ bool test_parse_string_array() {
     const auto json = R"({"arr":["hello","world","foo"]})";
     string_array obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.arr.size(), 3u);
     CHECK_EQ(obj.arr[0], "hello");
     CHECK_EQ(obj.arr[1], "world");
@@ -611,8 +609,7 @@ bool test_parse_sv_array() {
     const auto json = R"({"arr":["alpha","beta","gamma"]})";
     sv_array obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.arr.size(), 3u);
     CHECK_EQ(obj.arr[0], "alpha");
     CHECK_EQ(obj.arr[1], "beta");
@@ -624,8 +621,7 @@ bool test_parse_int_string() {
     const auto json = R"({"i":42,"s":"hello"})";
     int_string obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.i, 42);
     CHECK_EQ(obj.s, "hello");
     return true;
@@ -635,8 +631,7 @@ bool test_parse_int_string_array() {
     const auto json = R"({"v":[{"i":1,"s":"one"},{"i":2,"s":"two"},{"i":3,"s":"three"}]})";
     int_string_array obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.v.size(), 3u);
     CHECK_EQ(obj.v[0].i, 1);
     CHECK_EQ(obj.v[0].s, "one");
@@ -651,8 +646,7 @@ bool test_parse_nested() {
     const auto json = R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"view"})";
     nested obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.i, 10);
     CHECK_EQ(obj.n.i, 20);
     CHECK_EQ(obj.n.s, "inner");
@@ -664,8 +658,7 @@ bool test_parse_nested_with_array() {
     const auto json = R"({"n":{"i":5,"n":{"i":6,"s":"deep"},"sv":"sv_val"},"v":[{"i":7,"s":"a"},{"i":8,"s":"b"}]})";
     nested_with_array obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.n.i, 5);
     CHECK_EQ(obj.n.n.i, 6);
     CHECK_EQ(obj.n.n.s, "deep");
@@ -682,8 +675,7 @@ bool test_parse_nested_nested_nested() {
     const auto json = R"({"a":{"n":{"i":1,"n":{"i":2,"s":"leaf"},"sv":"sv1"},"v":[{"i":3,"s":"x"}]}})";
     nested_nested_nested obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.a.n.i, 1);
     CHECK_EQ(obj.a.n.n.i, 2);
     CHECK_EQ(obj.a.n.n.s, "leaf");
@@ -698,8 +690,7 @@ bool test_parse_result_t() {
     const auto json = R"({"symbol":"BTCUSDT","preventedMatchId":42,"takerOrderId":100,"makerOrderId":200,"tradeGroupId":300,"selfTradePreventionMode":"NONE","price":"50000.00","makerPreventedQuantity":"0.5","transactTime":1700000000})";
     myns::result_t obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.symbol, "BTCUSDT");
     CHECK_EQ(obj.preventedMatchId, 42u);
     CHECK_EQ(obj.takerOrderId, 100u);
@@ -716,8 +707,7 @@ bool test_parse_rate_limits_t() {
     const auto json = R"({"rateLimitType":"ORDERS","interval":"SECOND","intervalNum":10,"limit":50,"count":3,"extra":{"source":"api","region":"us"},"codes":[100,200,300]})";
     myns::rate_limits_t obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.rateLimitType, "ORDERS");
     CHECK_EQ(obj.interval, "SECOND");
     CHECK_EQ(obj.intervalNum, 10u);
@@ -735,8 +725,7 @@ bool test_parse_response_t() {
     const auto json = R"({"id":"resp-001","status":200,"results":[{"symbol":"BTCUSDT","preventedMatchId":1,"takerOrderId":100,"makerOrderId":200,"tradeGroupId":300,"selfTradePreventionMode":"EXPIRE_MAKER","price":"50000.00","makerPreventedQuantity":"0.001","transactTime":1700000000}],"rate_limits":[{"rateLimitType":"ORDERS","interval":"SECOND","intervalNum":10,"limit":50,"count":3,"extra":{"src":"api"},"codes":[100,200]}],"headers":{"Content-Type":"application/json"},"warnings":["warning1","warning2"]})";
     myns::response_t obj{};
     auto p = jsonrefl::make_parser(&obj);
-    if ( !p.parse(json) ) return false;
-    CHECK(p.finished());
+    if ( p.parse(json) != jsonrefl::state::ok ) { return false; }
     CHECK_EQ(obj.id, "resp-001");
     CHECK_EQ(obj.status, 200u);
     CHECK_EQ(obj.results.size(), 1u);
@@ -1568,8 +1557,7 @@ int main() {
     {
         bool_test obj{false, 0};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"flag":true,"val":1})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"flag":true,"val":1})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 1);
         CHECK_EQ(obj.flag, true);
         std::cout << "test_literal_true: OK" << std::endl;
@@ -1577,8 +1565,7 @@ int main() {
     {
         bool_test obj{true, 0};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"flag":false,"val":2})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"flag":false,"val":2})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 2);
         CHECK_EQ(obj.flag, false);
         std::cout << "test_literal_false: OK" << std::endl;
@@ -1587,8 +1574,7 @@ int main() {
         null_test obj{};
         obj.opt = 42;
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"opt":null,"val":3})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"opt":null,"val":3})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 3);
         CHECK(obj.opt.has_value());
         CHECK_EQ(*obj.opt, 42);
@@ -1597,8 +1583,7 @@ int main() {
     {
         null_test obj{};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"opt":null,"val":5})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"opt":null,"val":5})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 5);
         CHECK(!obj.opt.has_value());
         std::cout << "test_literal_null_opt_default: OK" << std::endl;
@@ -1606,10 +1591,8 @@ int main() {
     {
         bool_test obj{false, 0};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"flag":tr)"));
-        CHECK(!p.finished());
-        CHECK(p.parse(R"(ue,"val":7})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"flag":tr)") == jsonrefl::state::incomplete);
+        CHECK(p.parse(R"(ue,"val":7})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 7);
         CHECK_EQ(obj.flag, true);
         std::cout << "test_literal_true_chunked: OK" << std::endl;
@@ -1617,10 +1600,8 @@ int main() {
     {
         bool_test obj{true, 0};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"flag":fal)"));
-        CHECK(!p.finished());
-        CHECK(p.parse(R"(se,"val":8})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"flag":fal)") == jsonrefl::state::incomplete);
+        CHECK(p.parse(R"(se,"val":8})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 8);
         CHECK_EQ(obj.flag, false);
         std::cout << "test_literal_false_chunked: OK" << std::endl;
@@ -1629,10 +1610,8 @@ int main() {
         null_test obj{};
         obj.opt = 99;
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"opt":nu)"));
-        CHECK(!p.finished());
-        CHECK(p.parse(R"(ll,"val":9})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"opt":nu)") == jsonrefl::state::incomplete);
+        CHECK(p.parse(R"(ll,"val":9})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 9);
         CHECK(obj.opt.has_value());
         CHECK_EQ(*obj.opt, 99);
@@ -1642,8 +1621,7 @@ int main() {
         null_arr_test obj{};
         obj.arr = std::vector<int>{1, 2, 3};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"arr":null,"val":10})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"arr":null,"val":10})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 10);
         CHECK(obj.arr.has_value());
         CHECK_EQ(obj.arr->size(), 3u);
@@ -1652,43 +1630,54 @@ int main() {
     {
         null_arr_test obj{};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"arr":null,"val":11})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"arr":null,"val":11})") == jsonrefl::state::ok);
         CHECK_EQ(obj.val, 11);
         CHECK(!obj.arr.has_value());
         std::cout << "test_literal_null_opt_vec_default: OK" << std::endl;
     }
     {
         int_string obj{};
+        std::string accum;
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"i":42,"s":"hel)"));
-        CHECK(!p.finished());
-        CHECK(p.parse(R"(lo"})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"i":42,"s":"hel)", &accum) == jsonrefl::state::incomplete);
+        CHECK(p.parse(R"(lo"})", &accum) == jsonrefl::state::ok);
         CHECK_EQ(obj.i, 42);
         CHECK_EQ(obj.s, "hello");
         std::cout << "test_parse_string_chunked_ok: OK" << std::endl;
     }
     {
-        nested obj{};
+        int_string obj{};
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"vi)"));
-        CHECK(!p.finished());
-        CHECK(!p.parse(R"(ew"})"));
+        CHECK(p.parse(R"({"i":42,"s":"hel)") == jsonrefl::state::no_buffer);
+        std::cout << "test_parse_no_buffer: OK" << std::endl;
+    }
+    {
+        int_string obj{};
+        std::string accum;
+        auto p = jsonrefl::make_parser(&obj);
+        CHECK(p.parse(R"({"i":42,"s":"hel)", &accum) == jsonrefl::state::incomplete);
+        CHECK(p.parse(R"(lo"})") == jsonrefl::state::no_buffer);
+        std::cout << "test_parse_no_buffer_mid_accum: OK" << std::endl;
+    }
+    {
+        nested obj{};
+        std::string accum;
+        auto p = jsonrefl::make_parser(&obj);
+        CHECK(p.parse(R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"vi)", &accum) == jsonrefl::state::incomplete);
+        CHECK(p.parse(R"(ew"})", &accum) == jsonrefl::state::invalid);
         std::cout << "test_parse_sv_chunked_reject: OK" << std::endl;
     }
     {
         nested obj{};
+        std::string accum;
         auto p = jsonrefl::make_parser(&obj);
-        CHECK(p.parse(R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"vi)"));
-        CHECK(!p.finished());
-        CHECK(!p.parse(R"(ew"})"));
+        CHECK(p.parse(R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"vi)", &accum) == jsonrefl::state::incomplete);
+        CHECK(p.parse(R"(ew"})", &accum) == jsonrefl::state::invalid);
 
         p.reset();
         obj = nested{};
 
-        CHECK(p.parse(R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"view"})"));
-        CHECK(p.finished());
+        CHECK(p.parse(R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"view"})") == jsonrefl::state::ok);
         CHECK_EQ(obj.i, 10);
         CHECK_EQ(obj.n.i, 20);
         CHECK_EQ(obj.n.s, "inner");
@@ -1696,7 +1685,226 @@ int main() {
         std::cout << "test_parse_reset_after_failure: OK" << std::endl;
     }
 
+    {
+        const char json[] = R"({"i":10,"n":{"i":20,"s":"inner"},"sv":"view"})";
+        const char *json_begin = json;
+        const char *json_end   = json + sizeof(json) - 1;
+
+        nested obj{};
+        auto p = jsonrefl::make_parser(&obj);
+        CHECK(p.parse(json) == jsonrefl::state::ok);
+
+        CHECK_EQ(obj.sv, "view");
+        CHECK(obj.sv.data() >= json_begin && obj.sv.data() + obj.sv.size() <= json_end);
+
+        std::cout << "test_zero_copy_nested_sv: OK" << std::endl;
+    }
+    {
+        const char json[] = R"({"arr":["alpha","beta","gamma"]})";
+        const char *json_begin = json;
+        const char *json_end   = json + sizeof(json) - 1;
+
+        sv_array obj{};
+        auto p = jsonrefl::make_parser(&obj);
+        CHECK(p.parse(json) == jsonrefl::state::ok);
+
+        CHECK_EQ(obj.arr.size(), 3u);
+        for (const auto &sv : obj.arr) {
+            CHECK(sv.data() >= json_begin && sv.data() + sv.size() <= json_end);
+        }
+
+        std::cout << "test_zero_copy_sv_array: OK" << std::endl;
+    }
+    {
+        const char json[] = R"({"symbol":"BTCUSDT","preventedMatchId":1,"takerOrderId":100,"makerOrderId":200,"tradeGroupId":300,"selfTradePreventionMode":"NONE","price":"50000.00","makerPreventedQuantity":"0.5","transactTime":1700000000})";
+        const char *json_begin = json;
+        const char *json_end   = json + sizeof(json) - 1;
+
+        myns::result_t obj{};
+        auto p = jsonrefl::make_parser(&obj);
+        CHECK(p.parse(json) == jsonrefl::state::ok);
+
+        CHECK(obj.symbol.data() >= json_begin && obj.symbol.data() + obj.symbol.size() <= json_end);
+        CHECK(obj.selfTradePreventionMode.data() >= json_begin && obj.selfTradePreventionMode.data() + obj.selfTradePreventionMode.size() <= json_end);
+        CHECK(obj.price.data() >= json_begin && obj.price.data() + obj.price.size() <= json_end);
+        CHECK(obj.makerPreventedQuantity.data() >= json_begin && obj.makerPreventedQuantity.data() + obj.makerPreventedQuantity.size() <= json_end);
+
+        std::cout << "test_zero_copy_result_t: OK" << std::endl;
+    }
+
     std::cout << "all parse tests: OK" << std::endl;
+
+    {
+        struct token_checker {
+            std::vector<std::string> chunks;
+            void operator()(const void *data, std::size_t size) {
+                chunks.emplace_back(static_cast<const char *>(data), size);
+            }
+        };
+
+        auto is_split_across = [](const std::vector<std::string> &chunks, std::string_view token) -> bool {
+            for (std::size_t i = 0; i + 1 < chunks.size(); ++i) {
+                const auto &c = chunks[i];
+                for (std::size_t overlap = 1; overlap < token.size(); ++overlap) {
+                    if ( c.size() >= overlap
+                        && c.compare(c.size() - overlap, overlap, token.data(), overlap) == 0
+                        && chunks[i + 1].size() >= token.size() - overlap
+                        && chunks[i + 1].compare(0, token.size() - overlap, token.data() + overlap, token.size() - overlap) == 0 )
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
+        {
+            bool_test obj{true, 42};
+            std::vector<std::string> chunks;
+            char cbuf[16];
+            jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), obj,
+                [&](const void *d, std::size_t s) -> bool {
+                    chunks.emplace_back(static_cast<const char*>(d), s);
+                    return true;
+                }
+            );
+            CHECK(!is_split_across(chunks, "true"));
+            CHECK(!is_split_across(chunks, "\"flag\""));
+            CHECK(!is_split_across(chunks, "\"val\""));
+            CHECK(!is_split_across(chunks, "42"));
+            std::cout << "test_chunked_no_split_bool_true: OK" << std::endl;
+        }
+        {
+            bool_test obj{false, 12345};
+            std::vector<std::string> chunks;
+            char cbuf[16];
+            jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), obj,
+                [&](const void *d, std::size_t s) -> bool {
+                    chunks.emplace_back(static_cast<const char*>(d), s);
+                    return true;
+                }
+            );
+            CHECK(!is_split_across(chunks, "false"));
+            CHECK(!is_split_across(chunks, "\"flag\""));
+            CHECK(!is_split_across(chunks, "\"val\""));
+            CHECK(!is_split_across(chunks, "12345"));
+            std::cout << "test_chunked_no_split_bool_false: OK" << std::endl;
+        }
+        {
+            null_test obj{};
+            obj.opt = std::nullopt;
+            obj.val = 99;
+            std::vector<std::string> chunks;
+            char cbuf[16];
+            jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), obj,
+                [&](const void *d, std::size_t s) -> bool {
+                    chunks.emplace_back(static_cast<const char*>(d), s);
+                    return true;
+                }
+            );
+            CHECK(!is_split_across(chunks, "null"));
+            CHECK(!is_split_across(chunks, "\"opt\""));
+            CHECK(!is_split_across(chunks, "\"val\""));
+            CHECK(!is_split_across(chunks, "99"));
+            std::cout << "test_chunked_no_split_null: OK" << std::endl;
+        }
+        {
+            std::map<std::string, int> m = {{"alpha", 1}, {"beta", 2}, {"gamma", 3}};
+            std::vector<std::string> chunks;
+            char cbuf[16];
+            jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), m,
+                [&](const void *d, std::size_t s) -> bool {
+                    chunks.emplace_back(static_cast<const char*>(d), s);
+                    return true;
+                }
+            );
+            CHECK(!is_split_across(chunks, "\"alpha\""));
+            CHECK(!is_split_across(chunks, "\"beta\""));
+            CHECK(!is_split_across(chunks, "\"gamma\""));
+            std::cout << "test_chunked_no_split_map_keys: OK" << std::endl;
+        }
+        {
+            nested obj{};
+            obj.i = 123456;
+            obj.n.i = -789;
+            obj.n.s = "hello";
+            obj.sv = "world";
+            std::vector<std::string> chunks;
+            char cbuf[24];
+            jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), obj,
+                [&](const void *d, std::size_t s) -> bool {
+                    chunks.emplace_back(static_cast<const char*>(d), s);
+                    return true;
+                }
+            );
+            CHECK(!is_split_across(chunks, "\"i\""));
+            CHECK(!is_split_across(chunks, "\"n\""));
+            CHECK(!is_split_across(chunks, "\"s\""));
+            CHECK(!is_split_across(chunks, "\"sv\""));
+            CHECK(!is_split_across(chunks, "123456"));
+            CHECK(!is_split_across(chunks, "-789"));
+            std::cout << "test_chunked_no_split_nested_keys_nums: OK" << std::endl;
+        }
+    }
+
+    {
+        std::string long_value(2000, 'X');
+        int_string obj{};
+        obj.i = 7;
+        obj.s = long_value;
+
+        std::string chunked;
+        char cbuf[64];
+        bool ok = jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), obj,
+            [&](const void *d, std::size_t s) -> bool {
+                chunked.append(static_cast<const char*>(d), s);
+                return true;
+            }
+        );
+        CHECK(ok);
+
+        auto ref = jsonrefl::to_string(obj);
+        CHECK_EQ(chunked, ref);
+
+        int_string parsed{};
+        auto p = jsonrefl::make_parser(&parsed);
+        CHECK(p.parse(chunked) == jsonrefl::state::ok);
+        CHECK_EQ(parsed.i, 7);
+        CHECK_EQ(parsed.s, long_value);
+        std::cout << "test_chunked_long_string_roundtrip: OK" << std::endl;
+    }
+
+    {
+        std::string long_value(2000, 'Y');
+        int_string obj{};
+        obj.i = 42;
+        obj.s = long_value;
+
+        std::vector<std::string> chunks;
+        char cbuf[64];
+        jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), obj,
+            [&](const void *d, std::size_t s) -> bool {
+                chunks.emplace_back(static_cast<const char*>(d), s);
+                return true;
+            }
+        );
+        CHECK(chunks.size() > 1);
+
+        int_string parsed{};
+        std::string accum;
+        auto p = jsonrefl::make_parser(&parsed);
+        jsonrefl::state last = jsonrefl::state::incomplete;
+        for (const auto &chunk : chunks) {
+            last = p.parse(chunk, &accum);
+            if ( last == jsonrefl::state::invalid ) { CHECK(false); break; }
+        }
+        CHECK(last == jsonrefl::state::ok);
+        CHECK_EQ(parsed.i, 42);
+        CHECK_EQ(parsed.s, long_value);
+        std::cout << "test_chunked_long_string_chunked_deser: OK" << std::endl;
+    }
+
+    std::cout << "all chunked token tests: OK" << std::endl;
 
     return 0;
 }

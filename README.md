@@ -13,7 +13,7 @@ No external dependencies. No external code generation. Just one header.
 - **Just one-allocation serialization** — `required_bytes()` computes exact size, `to_buffer()` writes directly into a pre-allocated buffer
 - **Streaming serialization** — `to_chunked_buffer()` writes into a fixed-size buffer with a flush callback, ideal for sockets and constrained memory
 - **Zero-copy deserialization** — `std::string_view` members point directly into the input buffer, no string copying
-- **Streaming deserialization** — `make_parser()` + `parse()` accepts data chunk by chunk as it arrives
+- **Streaming deserialization** — `make_parser()` + `parse()` accepts data chunk by chunk as it arrives, returning `state` (`ok`, `incomplete`, `invalid`, `extra_data`, `no_buffer`)
 - **Pretty-print** — all serialization functions accept a `pretty` flag for indented output
 - **Rich type support** — nested structs, `std::vector`, `std::list`, `std::map`, `std::unordered_map`, `std::optional`, `std::string`, `std::string_view`, `bool`, integers, floats
 - **Runtime introspection** — query struct name, member count, member types by name
@@ -174,6 +174,16 @@ jsonrefl::to_string(m);  // {"a":1,"b":2}
 
 ### Basic Parsing
 
+`parse()` returns `jsonrefl::state`:
+
+| Value | Meaning |
+|---|---|
+| `ok` | Document is complete |
+| `incomplete` | More data needed (chunked input) |
+| `invalid` | JSON is malformed or cannot be deserialized |
+| `extra_data` | Non-whitespace data after a complete document |
+| `no_buffer` | Accumulation needed but no buffer provided |
+
 ```cpp
 struct config {
     std::string host;
@@ -184,27 +194,28 @@ JSONREFL_METADATA(config, host, port);
 config cfg{};
 auto p = jsonrefl::make_parser(&cfg);
 
-bool ok = p.parse(R"({"host":"localhost","port":8080})");
-// ok == true, cfg.host == "localhost", cfg.port == 8080
-
-bool done = p.finished();
-// done == true — the JSON document is complete
+auto state = p.parse(R"({"host":"localhost","port":8080})");
+// state == jsonrefl::state::ok
+// cfg.host == "localhost", cfg.port == 8080
 ```
 
 ### Streaming (Chunked) Parsing
 
-Feed data chunk by chunk as it arrives from the network:
+Feed data chunk by chunk as it arrives from the network. When a string or number value may be split across chunks, pass a `std::string*` accumulation buffer:
 
 ```cpp
 config cfg{};
+std::string accum;
 auto p = jsonrefl::make_parser(&cfg);
 
-p.parse(R"({"host":"local)");  // first chunk, returns true
-p.finished();                   // false — document is incomplete
+auto s1 = p.parse(R"({"host":"local)", &accum);
+// s1 == jsonrefl::state::incomplete
 
-p.parse(R"(host","port":8080})");  // second chunk, returns true
-p.finished();                       // true — document is complete
+auto s2 = p.parse(R"(host","port":8080})", &accum);
+// s2 == jsonrefl::state::ok
 ```
+
+If `accum` is `nullptr` (default) and the parser needs to accumulate across chunk boundaries, `parse()` returns `state::no_buffer`.
 
 ### Parser Reset
 
@@ -212,12 +223,14 @@ After an error, `reset()` restores the parser to its initial state for reuse:
 
 ```cpp
 auto p = jsonrefl::make_parser(&obj);
-p.parse(bad_json);  // returns false
+auto state = p.parse(bad_json);
+// state == jsonrefl::state::invalid
 
 p.reset();          // back to initial state
 obj = {};           // clear the target object
 
-p.parse(good_json); // works
+state = p.parse(good_json);
+// state == jsonrefl::state::ok
 ```
 
 ### Root Container Parsing
@@ -260,7 +273,7 @@ p.parse(json);
 ### Limitations
 
 - **Buffer lifetime** — the input buffer must outlive all `std::string_view` members, since they point directly into it.
-- **Chunked parsing** — if a `std::string_view` member's value is split across two chunks, the parser returns an error (`parse()` returns `false`), because there is no contiguous buffer to point into. Use `std::string` for members that may be split across chunk boundaries.
+- **Chunked parsing** — if a `std::string_view` member's value is split across two chunks, the parser returns `state::invalid`, because there is no contiguous buffer to point into. Use `std::string` for members that may be split across chunk boundaries.
 - **Escape sequences** — `std::string_view` members receive the raw (unescaped) slice from the buffer. Use `std::string` if you need decoded escape sequences (`\n`, `\uXXXX`, etc.).
 
 ## Supported Types

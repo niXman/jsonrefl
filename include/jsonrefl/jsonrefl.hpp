@@ -28,6 +28,7 @@
 #include <ostream>
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 
 /*************************************************************************************************/
@@ -35,10 +36,18 @@
 #define __JSONREFL_CAT_I(a, b) a ## b
 #define __JSONREFL_CAT(a, b) __JSONREFL_CAT_I(a, b)
 
-#ifdef __GNUC__
-#define __JSONREFL_UNLIKELY(...) (__builtin_expect(!!(__VA_ARGS__), 0))
+#if (__cplusplus >= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)
+#  define __JSONREFL_LIKELY(...)   (__VA_ARGS__) [[likely]]
+#  define __JSONREFL_UNLIKELY(...) (__VA_ARGS__) [[unlikely]]
+#elif defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER) || defined(__INTEL_LLVM_COMPILER)
+#  define __JSONREFL_LIKELY(...)   (__builtin_expect(!!(__VA_ARGS__), 1))
+#  define __JSONREFL_UNLIKELY(...) (__builtin_expect(!!(__VA_ARGS__), 0))
+#elif defined(_MSC_VER)
+#  define __JSONREFL_LIKELY(...)   (__VA_ARGS__)
+#  define __JSONREFL_UNLIKELY(...) (__VA_ARGS__)
 #else
-#define __JSONREFL_UNLIKELY(...) (__VA_ARGS__)
+#  define __JSONREFL_LIKELY(...)   (__VA_ARGS__)
+#  define __JSONREFL_UNLIKELY(...) (__VA_ARGS__)
 #endif
 
 #define __JSONREFL_ARG_N( \
@@ -140,7 +149,7 @@
     ,::jsonrefl::object_member(#elem, data elem)
 
 #define JSONREFL_METADATA(_type, ...)                                                  \
-    inline constexpr auto __jsonrefl_meta_##_type = ::jsonrefl::object_holder(      \
+    inline constexpr auto __jsonrefl_meta_##_type = ::jsonrefl::object_holder(         \
         #_type                                                                         \
         __JSONREFL_ENUM_ARGS(__JSONREFL_OBJECT_MEMBER, &_type::, __VA_ARGS__)          \
     );                                                                                 \
@@ -169,13 +178,7 @@
     struct _type {                                                                     \
         __JSONREFL_ENUM_ARGS(__JSONREFL_STRUCT_FIELD, ~, __VA_ARGS__)                  \
     };                                                                                 \
-    inline constexpr auto __jsonrefl_meta_##_type = ::jsonrefl::object_holder(      \
-        #_type                                                                         \
-        __JSONREFL_ENUM_ARGS(__JSONREFL_STRUCT_META, &_type::, __VA_ARGS__)            \
-    );                                                                                 \
-    constexpr const auto* __jsonrefl_adl_meta(_type*) noexcept {                       \
-        return &__jsonrefl_meta_##_type;                                               \
-    }
+    JSONREFL_METADATA(_type, __VA_ARGS__)
 
 /*************************************************************************************************/
 
@@ -183,7 +186,7 @@ namespace jsonrefl {
 
 /*************************************************************************************************/
 
-class exception final : public std::exception {
+class exception final: public std::exception {
     const char *m_msg;
 public:
     explicit exception(const char *msg) noexcept : m_msg{msg} {}
@@ -233,7 +236,6 @@ constexpr auto mymax(T a0, T a1, Ts... ts)
 template<typename T>
 constexpr std::size_t stack_depth() noexcept;
 
-
 namespace details {
 /*************************************************************************************************/
 
@@ -250,6 +252,7 @@ constexpr It upper_bound(It first, It last, const T &value) noexcept {
             count = step;
         }
     }
+
     return first;
 }
 
@@ -266,6 +269,7 @@ constexpr It lower_bound(It first, It last, const T &value) noexcept {
             count = step;
         }
     }
+
     return first;
 }
 
@@ -377,13 +381,14 @@ inline std::size_t float_chars_count(double v) noexcept {
         ,1e290, 1e291, 1e292, 1e293, 1e294, 1e295, 1e296, 1e297, 1e298, 1e299
         ,1e300, 1e301, 1e302, 1e303, 1e304, 1e305, 1e306, 1e307, 1e308
     };
-    if ( v != v ) return 3;
+    if ( v != v ) { return 3; }
     std::size_t n = (v < 0.0) ? 1 : 0;
     const double av = v < 0.0 ? -v : v;
-    if ( av * 0.0 != 0.0 ) return n + 3;
+    if ( av * 0.0 != 0.0 ) { return n + 3; }
     const auto it = upper_bound(pow10, pow10 + sizeof(pow10)/sizeof(pow10[0]), av);
     auto int_digits = static_cast<std::size_t>(it - pow10);
-    if ( int_digits == 0 ) int_digits = 1;
+    if ( int_digits == 0 ) { int_digits = 1; }
+
     return n + int_digits + 7;
 }
 
@@ -396,50 +401,53 @@ std::size_t required_bytes(const U &v, bool pretty, std::size_t indent) noexcept
         for ( char c : v ) {
             n += 1 + k_esc.extra[static_cast<unsigned char>(c)];
         }
+
         return n;
     } else if constexpr ( std::is_same_v<U, bool> ) {
         return v ? 4 : 5;
     } else if constexpr ( std::is_integral_v<U> ) {
-        if ( v == 0 ) return 1;
+        if ( v == 0 ) { return 1; }
         std::size_t n = 0;
         if constexpr ( std::is_signed_v<U> ) {
             if ( v < 0 ) { n = 1; }
         }
         auto uv = static_cast<std::make_unsigned_t<U>>(v < 0 ? -v : v);
         while ( uv ) { ++n; uv /= 10; }
+
         return n;
     } else if constexpr ( std::is_floating_point_v<U> ) {
         return float_chars_count(static_cast<double>(v));
     } else if constexpr ( is_array_type<U>::value ) {
-        if ( v.empty() ) return 2;
+        if ( v.empty() ) { return 2; }
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
         std::size_t n = 1;
-        if ( pretty ) n += 1;
+        if ( pretty ) { n += 1; }
         bool first = true;
         for ( const auto &elem : v ) {
             if ( !first ) {
                 n += 1;
-                if ( pretty ) n += 1;
+                if ( pretty ) { n += 1; }
             }
-            if ( pretty ) n += child;
+            if ( pretty ) { n += child; }
             n += required_bytes(elem, pretty, child);
             first = false;
         }
         if ( pretty ) { n += 1; n += indent; }
         n += 1;
+
         return n;
     } else if constexpr ( is_object_type<U>::value ) {
-        if ( v.empty() ) return 2;
+        if ( v.empty() ) { return 2; }
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
         std::size_t n = 1;
-        if ( pretty ) n += 1;
+        if ( pretty ) { n += 1; }
         bool first = true;
         for ( const auto &[k, val] : v ) {
             if ( !first ) {
                 n += 1;
-                if ( pretty ) n += 1;
+                if ( pretty ) { n += 1; }
             }
-            if ( pretty ) n += child;
+            if ( pretty ) { n += child; }
             n += required_bytes(k, pretty, child);
             n += pretty ? 2 : 1;
             n += required_bytes(val, pretty, child);
@@ -447,6 +455,7 @@ std::size_t required_bytes(const U &v, bool pretty, std::size_t indent) noexcept
         }
         if ( pretty ) { n += 1; n += indent; }
         n += 1;
+
         return n;
     } else if constexpr ( is_optional_type<U>::value ) {
         return v.has_value() ? required_bytes(*v, pretty, indent) : 4;
@@ -467,27 +476,31 @@ char* write_json(char *ptr, const U &v, bool pretty, std::size_t indent) noexcep
             else { *ptr++ = c; }
         }
         *ptr++ = '"';
+
         return ptr;
     } else if constexpr ( std::is_same_v<U, bool> ) {
         std::memcpy(ptr, v ? "true" : "false", v ? 4 : 5);
+
         return ptr + (v ? 4 : 5);
     } else if constexpr ( std::is_integral_v<U> ) {
         auto res = std::to_chars(ptr, ptr + 24, v);
+
         return res.ptr;
     } else if constexpr ( std::is_floating_point_v<U> ) {
         auto len = float_chars_count(static_cast<double>(v));
         auto res = std::to_chars(ptr, ptr + len, static_cast<double>(v), std::chars_format::fixed, 6);
+
         return res.ptr;
     } else if constexpr ( is_array_type<U>::value ) {
         if ( v.empty() ) { std::memcpy(ptr, "[]", 2); return ptr + 2; }
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
         *ptr++ = '[';
-        if ( pretty ) *ptr++ = '\n';
+        if ( pretty ) { *ptr++ = '\n'; }
         bool first = true;
         for ( const auto &elem : v ) {
             if ( !first ) {
                 *ptr++ = ',';
-                if ( pretty ) *ptr++ = '\n';
+                if ( pretty ) { *ptr++ = '\n'; }
             }
             if ( pretty ) { std::memset(ptr, ' ', child); ptr += child; }
             ptr = write_json(ptr, elem, pretty, child);
@@ -498,17 +511,18 @@ char* write_json(char *ptr, const U &v, bool pretty, std::size_t indent) noexcep
             std::memset(ptr, ' ', indent); ptr += indent;
         }
         *ptr++ = ']';
+
         return ptr;
     } else if constexpr ( is_object_type<U>::value ) {
         if ( v.empty() ) { std::memcpy(ptr, "{}", 2); return ptr + 2; }
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
         *ptr++ = '{';
-        if ( pretty ) *ptr++ = '\n';
+        if ( pretty ) { *ptr++ = '\n'; }
         bool first = true;
         for ( const auto &[k, val] : v ) {
             if ( !first ) {
                 *ptr++ = ',';
-                if ( pretty ) *ptr++ = '\n';
+                if ( pretty ) { *ptr++ = '\n'; }
             }
             if ( pretty ) { std::memset(ptr, ' ', child); ptr += child; }
             ptr = write_json(ptr, k, pretty, child);
@@ -525,13 +539,16 @@ char* write_json(char *ptr, const U &v, bool pretty, std::size_t indent) noexcep
             std::memset(ptr, ' ', indent); ptr += indent;
         }
         *ptr++ = '}';
+
         return ptr;
     } else if constexpr ( is_optional_type<U>::value ) {
-        if ( v.has_value() ) return write_json(ptr, *v, pretty, indent);
+        if ( v.has_value() ) { return write_json(ptr, *v, pretty, indent); }
         std::memcpy(ptr, "null", 4);
+
         return ptr + 4;
     } else {
         std::memcpy(ptr, "null", 4);
+
         return ptr + 4;
     }
 }
@@ -551,8 +568,9 @@ struct chunked_writer {
     {}
 
     bool put(char c) noexcept {
-        if __JSONREFL_UNLIKELY( pos == capacity && !flush() ) return false;
+        if __JSONREFL_UNLIKELY( pos == capacity && !flush() ) { return false; }
         buf[pos++] = c;
+
         return true;
     }
 
@@ -564,8 +582,9 @@ struct chunked_writer {
             pos += n;
             data += n;
             len -= n;
-            if __JSONREFL_UNLIKELY( pos == capacity && !flush() ) return false;
+            if __JSONREFL_UNLIKELY( pos == capacity && !flush() ) { return false; }
         }
+
         return ok;
     }
 
@@ -576,9 +595,62 @@ struct chunked_writer {
             std::memset(buf + pos, c, n);
             pos += n;
             count -= n;
-            if __JSONREFL_UNLIKELY( pos == capacity && !flush() ) return false;
+            if __JSONREFL_UNLIKELY( pos == capacity && !flush() ) { return false; }
         }
+
         return ok;
+    }
+
+    bool write_token(const char *data, std::size_t len) noexcept {
+        if __JSONREFL_UNLIKELY( capacity - pos < len ) {
+            if __JSONREFL_UNLIKELY( !flush() ) { return false; }
+        }
+        if __JSONREFL_UNLIKELY( len > capacity ) {
+            return write(data, len);
+        }
+        std::memcpy(buf + pos, data, len);
+        pos += len;
+
+        return true;
+    }
+
+    bool write_quoted_token(std::string_view sv) noexcept {
+        std::size_t total = 2;
+        for ( auto c : sv )
+            total += k_esc.replacement[static_cast<unsigned char>(c)] ? 2 : 1;
+        if __JSONREFL_UNLIKELY( capacity - pos < total ) {
+            if __JSONREFL_UNLIKELY( !flush() ) { return false; }
+        }
+        if __JSONREFL_LIKELY( capacity - pos >= total ) {
+            buf[pos++] = '"';
+            for ( auto c : sv ) {
+                const char r = k_esc.replacement[static_cast<unsigned char>(c)];
+                if __JSONREFL_UNLIKELY( r ) { buf[pos++] = '\\'; buf[pos++] = r; }
+                else { buf[pos++] = c; }
+            }
+            buf[pos++] = '"';
+
+            return true;
+        }
+        if ( !put('"') ) { return false; }
+        const char *src = sv.data();
+        const char *const end = src + sv.size();
+        while ( src != end ) {
+            const char *run = src;
+            while ( run != end && !k_esc.replacement[static_cast<unsigned char>(*run)] )
+                ++run;
+            if ( run != src ) {
+                if ( !write(src, static_cast<std::size_t>(run - src)) ) { return false; }
+            }
+            if ( run != end ) {
+                const char esc[2] = {'\\', k_esc.replacement[static_cast<unsigned char>(*run)]};
+                if ( !write(esc, 2) ) { return false; }
+                ++run;
+            }
+            src = run;
+        }
+
+        return put('"');
     }
 
     template<bool Pretty>
@@ -586,10 +658,11 @@ struct chunked_writer {
         const std::size_t pfx = first ? std::size_t{0} : (Pretty ? std::size_t{2} : std::size_t{1});
         const std::size_t ind = Pretty ? indent : std::size_t{0};
         const std::size_t total = pfx + ind + 1 + name.size() + (Pretty ? 3 : 2);
-        if ( capacity - pos >= total ) {
+        if __JSONREFL_UNLIKELY( capacity - pos < total && !flush() ) { return false; }
+        if __JSONREFL_LIKELY( capacity - pos >= total ) {
             if ( !first ) {
                 buf[pos++] = ',';
-                if constexpr (Pretty) buf[pos++] = '\n';
+                if constexpr (Pretty) { buf[pos++] = '\n'; }
             }
             if constexpr (Pretty) { std::memset(buf + pos, ' ', indent); pos += indent; }
             buf[pos++] = '"';
@@ -600,23 +673,25 @@ struct chunked_writer {
             } else {
                 std::memcpy(buf + pos, "\":", 2); pos += 2;
             }
+
             return true;
         }
         if ( !first ) {
-            if ( !put(',') ) return false;
-            if constexpr (Pretty) { if ( !put('\n') ) return false; }
+            if ( !put(',') ) { return false; }
+            if constexpr (Pretty) { if ( !put('\n') ) { return false; } }
         }
-        if constexpr (Pretty) { if ( !fill(' ', indent) ) return false; }
-        if ( !put('"') ) return false;
-        if ( !write(name.data(), name.size()) ) return false;
+        if constexpr (Pretty) { if ( !fill(' ', indent) ) { return false; } }
+        if ( !put('"') ) { return false; }
+        if ( !write(name.data(), name.size()) ) { return false; }
         if constexpr (Pretty) { return write("\": ", 3); }
         else { return write("\":", 2); }
     }
 
     char* reserve(std::size_t n) noexcept {
         if __JSONREFL_UNLIKELY( capacity - pos < n ) {
-            if ( !flush() ) return nullptr;
+            if ( !flush() ) { return nullptr; }
         }
+
         return buf + pos;
     }
     void advance(std::size_t n) noexcept { pos += n; }
@@ -626,6 +701,7 @@ struct chunked_writer {
             ok = flush_fn(ctx, buf, pos);
             pos = 0;
         }
+
         return ok;
     }
 };
@@ -638,31 +714,62 @@ bool stream_json(chunked_writer &w, const U &v, std::size_t indent) noexcept;
 struct object_holder_base;
 
 struct setter_base {
-    virtual bool is_object() const noexcept = 0;
-    virtual bool is_array() const noexcept = 0;
-    virtual bool is_int() const noexcept = 0;
-    virtual bool is_uint() const noexcept = 0;
-    virtual bool is_double() const noexcept = 0;
-    virtual bool is_string_like() const noexcept = 0;
-    virtual bool is_string_view() const noexcept = 0;
-    virtual char type_id() const noexcept {
-        return is_object()
-            ? 'O'
-            : is_array()
-                ? 'A'
-                : is_int()
-                    ? 'I'
-                    : is_uint()
-                        ? 'U'
-                        : is_double()
-                            ? 'F'
-                            : is_string_like()
-                                ? 'S'
-                                : '-'
-        ;
+private:
+    enum class type_kind: std::uint8_t {
+         unknown     = 0
+        ,object      = 1
+        ,array       = 2
+        ,sint        = 3
+        ,uint        = 4
+        ,fp          = 5
+        ,string      = 6
+        ,string_view = 7
+    };
+
+    type_kind m_kind;
+    bool      m_has_metadata;
+
+protected:
+    template<typename U>
+    static constexpr auto deduce_member_kind() noexcept {
+        if constexpr ( is_object_type<U>::value )                 { return type_kind::object; }
+        else if constexpr ( is_array_type<U>::value )             { return type_kind::array; }
+        else if constexpr ( std::is_same_v<U, std::string_view> ) { return type_kind::string_view; }
+        else if constexpr ( is_string_like_t<U>::value )          { return type_kind::string; }
+        else if constexpr ( std::is_floating_point_v<U> )         { return type_kind::fp; }
+        else if constexpr ( std::is_unsigned_v<U> )               { return type_kind::uint; }
+        else if constexpr ( std::is_integral_v<U> )               { return type_kind::sint; }
+        else                                                      { return type_kind::unknown; }
     }
 
-    virtual bool has_metadata() const noexcept = 0;
+    template<typename U>
+    static constexpr auto deduce_root_kind() noexcept {
+        if constexpr ( is_object_type<U>::value ) { return type_kind::object; }
+        else if constexpr ( is_array_type<U>::value ) { return type_kind::array; }
+        else { return type_kind::unknown; }
+    }
+
+public:
+    constexpr setter_base(type_kind kind = type_kind::unknown, bool has_meta = false) noexcept
+        : m_kind{kind}
+        , m_has_metadata{has_meta}
+    {}
+
+    bool is_object()      const noexcept { return m_kind == type_kind::object; }
+    bool is_array()       const noexcept { return m_kind == type_kind::array; }
+    bool is_int()         const noexcept { return m_kind == type_kind::sint || m_kind == type_kind::uint; }
+    bool is_uint()        const noexcept { return m_kind == type_kind::uint; }
+    bool is_double()      const noexcept { return m_kind == type_kind::fp; }
+    bool is_string()      const noexcept { return m_kind == type_kind::string || m_kind == type_kind::string_view; }
+    bool is_string_view() const noexcept { return m_kind == type_kind::string_view; }
+    bool has_metadata()   const noexcept { return m_has_metadata; }
+
+    char type_id() const noexcept {
+        constexpr char map[] = "-OAIUFSV";
+
+        return map[static_cast<std::uint8_t>(m_kind)];
+    }
+
     virtual const object_holder_base* get_metadata() const noexcept = 0;
     virtual const object_holder_base* get_element_metadata() const noexcept { return nullptr; }
 
@@ -733,7 +840,7 @@ class setter_t final: public setter_base {
     // optional — emplace and delegate
     template<typename V>
     static void set_impl(std::optional<V> &v, std::string_view str) {
-        if ( !v ) v.emplace();
+        if ( !v ) { v.emplace(); }
         set_impl(*v, str);
     }
 
@@ -750,6 +857,7 @@ class setter_t final: public setter_base {
         auto &back = u.back();
         if constexpr ( is_optional_type<typename U::value_type>::value ) {
             back.emplace();
+
             return std::addressof(*back);
         } else {
             return &back;
@@ -767,7 +875,8 @@ class setter_t final: public setter_base {
 
     static auto& ensure_ref(T &v) {
         if constexpr ( is_optional_type<T>::value ) {
-            if ( !v ) v.emplace();
+            if ( !v ) { v.emplace(); }
+
             return *v;
         } else {
             return v;
@@ -776,20 +885,10 @@ class setter_t final: public setter_base {
 
 public:
     constexpr setter_t(T C::*ptr) noexcept
-        :setter_base{}
-        ,m_ptr{ptr}
+        : setter_base{setter_base::template deduce_member_kind<inner_type>(), jsonrefl::has_metadata<inner_type>::value}
+        , m_ptr{ptr}
     {}
 
-    bool is_object() const noexcept override { return is_object_type<inner_type>::value; }
-    bool is_array() const noexcept override { return is_array_type<inner_type>::value; }
-    bool is_int() const noexcept override { return std::is_integral_v<inner_type>; }
-    bool is_uint() const noexcept override { return is_int() && std::is_unsigned_v<inner_type>; }
-    bool is_double() const noexcept override { return std::is_floating_point_v<inner_type>; }
-    bool is_string_like() const noexcept override { return is_string_like_t<inner_type>::value; }
-    bool is_string_view() const noexcept override { return std::is_same_v<inner_type, std::string_view>; }
-
-    bool has_metadata() const noexcept override
-    { return jsonrefl::has_metadata<inner_type>::value; }
     const object_holder_base* get_metadata() const noexcept override {
         if constexpr ( jsonrefl::has_metadata<inner_type>::value ) {
             return std::addressof(metadata<inner_type>());
@@ -805,13 +904,15 @@ public:
                 return std::addressof(metadata<raw_elem>());
             }
         }
+
         return nullptr;
     }
 
     void* member_address(void *obj) const noexcept override {
         if constexpr ( is_optional_type<T>::value ) {
             auto &opt = static_cast<C *>(obj)->*m_ptr;
-            if ( !opt ) opt.emplace();
+            if ( !opt ) { opt.emplace(); }
+
             return std::addressof(*opt);
         } else {
             return std::addressof(static_cast<C *>(obj)->*m_ptr);
@@ -820,6 +921,7 @@ public:
     const void* member_address(const void *obj) const noexcept override {
         if constexpr ( is_optional_type<T>::value ) {
             const auto &opt = static_cast<const C *>(obj)->*m_ptr;
+
             return opt.has_value() ? std::addressof(*opt) : nullptr;
         } else {
             return std::addressof(static_cast<const C *>(obj)->*m_ptr);
@@ -901,14 +1003,10 @@ class root_setter_t final: public setter_base {
     static void conv(U &v, std::string_view str) { v = str; }
 
 public:
-    bool is_object() const noexcept override { return is_object_type<T>::value; }
-    bool is_array() const noexcept override { return is_array_type<T>::value; }
-    bool is_int() const noexcept override { return false; }
-    bool is_uint() const noexcept override { return false; }
-    bool is_double() const noexcept override { return false; }
-    bool is_string_like() const noexcept override { return false; }
-    bool is_string_view() const noexcept override { return false; }
-    bool has_metadata() const noexcept override { return false; }
+    constexpr root_setter_t() noexcept
+        : setter_base{setter_base::template deduce_root_kind<T>(), false}
+    {}
+
     const object_holder_base* get_metadata() const noexcept override { return nullptr; }
 
     void* member_address(void *obj) const noexcept override { return obj; }
@@ -944,13 +1042,14 @@ public:
     }
 
     bool value_to_stream(const void *, chunked_writer &w, bool, std::size_t) const noexcept override {
-        return w.write("null", 4);
+        return w.write_token("null", 4);
     }
 };
 
 template<typename T>
 const root_setter_t<T>* root_setter_ptr() noexcept {
     static const root_setter_t<T> instance;
+
     return &instance;
 }
 
@@ -982,6 +1081,7 @@ constexpr Iterator qsort_partition(Iterator left, Iterator right, Compare const 
     }
     cswap(*pivot, *left);
     pivot = left;
+
     return pivot;
 }
 
@@ -997,6 +1097,7 @@ constexpr void qsort(Iterator left, Iterator right, Compare const &compare) {
 template<typename Container, class Compare>
 constexpr Container qsort(Container array, Compare const &compare) {
     qsort(array.begin(), array.end() - 1, compare);
+
     return array;
 }
 
@@ -1076,6 +1177,7 @@ constexpr auto make_index(std::index_sequence<Ids...>, const CmpLess &less, cons
             ,static_cast<const setter_base *>(&(std::get<Ids>(tuple).member))
         )...
     );
+
     return res;
 }
 
@@ -1109,6 +1211,7 @@ public:
 
         const auto hash = fnv1a(key);
         const auto *it = details::lower_bound(m_beg, m_end, hash);
+
         return (it != m_end && it->first == hash)
             ? it->second
             : nullptr
@@ -1207,16 +1310,16 @@ public:
     std::size_t required_bytes(const void *obj, bool pretty, std::size_t indent) const noexcept override {
         std::size_t n = 1;
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
-        if ( pretty && sizeof...(Types) > 0 ) n += 1;
+        if ( pretty && sizeof...(Types) > 0 ) { n += 1; }
         bool first = true;
         std::apply(
             [&n, &first, obj, pretty, child](const auto & ...elems) {
                 const auto count = [&n, &first, obj, pretty, child](const auto &elem) {
                     if ( !first ) {
                         n += 1;
-                        if ( pretty ) n += 1;
+                        if ( pretty ) { n += 1; }
                     }
-                    if ( pretty ) n += child;
+                    if ( pretty ) { n += child; }
                     n += 1 + elem.name.size() + (pretty ? 3 : 2);
                     n += elem.member.value_required_bytes(obj, pretty, child);
                     first = false;
@@ -1230,20 +1333,21 @@ public:
             n += indent;
         }
         n += 1;
+
         return n;
     }
 
     char* to_buffer(const void *obj, char *ptr, bool pretty, std::size_t indent) const noexcept override {
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
         *ptr++ = '{';
-        if ( pretty && sizeof...(Types) > 0 ) *ptr++ = '\n';
+        if ( pretty && sizeof...(Types) > 0 ) { *ptr++ = '\n'; }
         bool first = true;
         std::apply(
             [&ptr, &first, obj, pretty, child](const auto & ...elems) {
                 const auto write = [&ptr, &first, obj, pretty, child](const auto &elem) {
                     if ( !first ) {
                         *ptr++ = ',';
-                        if ( pretty ) *ptr++ = '\n';
+                        if ( pretty ) { *ptr++ = '\n'; }
                     }
                     if ( pretty ) { std::memset(ptr, ' ', child); ptr += child; }
                     *ptr++ = '"';
@@ -1266,6 +1370,7 @@ public:
             std::memset(ptr, ' ', indent); ptr += indent;
         }
         *ptr++ = '}';
+
         return ptr;
     }
 
@@ -1278,29 +1383,30 @@ public:
     template<bool Pretty>
     bool to_stream_impl(const void *obj, chunked_writer &w, std::size_t indent) const noexcept {
         const auto child = Pretty ? indent + k_indent_step.size() : std::size_t{0};
-        if ( !w.put('{') ) return false;
-        if constexpr (Pretty) { if ( sizeof...(Types) > 0 && !w.put('\n') ) return false; }
+        if __JSONREFL_UNLIKELY( !w.put('{') ) { return false; }
+        if constexpr (Pretty) { if __JSONREFL_UNLIKELY( sizeof...(Types) > 0 && !w.put('\n') ) { return false; } }
         bool first = true;
         bool ok = true;
         std::apply(
             [&](const auto & ...elems) {
                 const auto write_one = [&](const auto &elem) {
-                    if ( !ok ) return;
-                    if ( !w.template write_field_key<Pretty>(elem.name, first, child) ) { ok = false; return; }
-                    if ( !elem.member.value_to_stream(obj, w, Pretty, child) ) { ok = false; return; }
+                    if __JSONREFL_UNLIKELY( !ok ) { return; }
+                    if __JSONREFL_UNLIKELY( !w.template write_field_key<Pretty>(elem.name, first, child) ) { ok = false; return; }
+                    if __JSONREFL_UNLIKELY( !elem.member.value_to_stream(obj, w, Pretty, child) ) { ok = false; return; }
                     first = false;
                 };
                 (write_one(elems), ...);
             }
             ,m_tuple
         );
-        if ( !ok ) return false;
+        if __JSONREFL_UNLIKELY( !ok ) { return false; }
         if constexpr (Pretty) {
             if ( !first ) {
-                if ( !w.put('\n') ) return false;
-                if ( !w.fill(' ', indent) ) return false;
+                if ( !w.put('\n') ) { return false; }
+                if ( !w.fill(' ', indent) ) { return false; }
             }
         }
+
         return w.put('}');
     }
 };
@@ -1312,92 +1418,100 @@ bool stream_json(chunked_writer &w, const U &v, std::size_t indent) noexcept {
     if constexpr ( has_metadata<U>::value ) {
         return metadata<U>().to_stream(&v, w, Pretty, indent);
     } else if constexpr ( is_string_like_t<U>::value ) {
-        if ( !w.put('"') ) return false;
+        if __JSONREFL_UNLIKELY( !w.put('"') ) { return false; }
         const char *src = v.data();
         const char *const end = src + v.size();
         while ( src != end ) {
             const char *run = src;
             while ( run != end && !k_esc.replacement[static_cast<unsigned char>(*run)] )
                 ++run;
-            if ( run != src ) {
-                if ( !w.write(src, static_cast<std::size_t>(run - src)) ) return false;
+            if __JSONREFL_LIKELY( run != src ) {
+                if __JSONREFL_UNLIKELY( !w.write(src, static_cast<std::size_t>(run - src)) ) { return false; }
             }
-            if ( run != end ) {
+            if __JSONREFL_UNLIKELY( run != end ) {
                 const char esc[2] = {'\\', k_esc.replacement[static_cast<unsigned char>(*run)]};
-                if ( !w.write(esc, 2) ) return false;
+                if __JSONREFL_UNLIKELY( !w.write(esc, 2) ) { return false; }
                 ++run;
             }
             src = run;
         }
+
         return w.put('"');
     } else if constexpr ( std::is_same_v<U, bool> ) {
-        return v ? w.write("true", 4) : w.write("false", 5);
+        return v ? w.write_token("true", 4) : w.write_token("false", 5);
     } else if constexpr ( std::is_integral_v<U> ) {
         if ( auto *p = w.reserve(24) ) {
             auto res = std::to_chars(p, p + 24, v);
             w.advance(static_cast<std::size_t>(res.ptr - p));
+
             return true;
         }
         char tmp[24];
         auto res = std::to_chars(tmp, tmp + sizeof(tmp), v);
-        return w.write(tmp, static_cast<std::size_t>(res.ptr - tmp));
+
+        return w.write_token(tmp, static_cast<std::size_t>(res.ptr - tmp));
     } else if constexpr ( std::is_floating_point_v<U> ) {
         if ( auto *p = w.reserve(32) ) {
             auto res = std::to_chars(p, p + 32, static_cast<double>(v), std::chars_format::fixed, 6);
             w.advance(static_cast<std::size_t>(res.ptr - p));
+
             return true;
         }
         char tmp[32];
         auto res = std::to_chars(tmp, tmp + sizeof(tmp), static_cast<double>(v), std::chars_format::fixed, 6);
-        return w.write(tmp, static_cast<std::size_t>(res.ptr - tmp));
+
+        return w.write_token(tmp, static_cast<std::size_t>(res.ptr - tmp));
     } else if constexpr ( is_array_type<U>::value ) {
-        if ( v.empty() ) return w.write("[]", 2);
+        if __JSONREFL_UNLIKELY( v.empty() ) { return w.write("[]", 2); }
         const auto child = Pretty ? indent + k_indent_step.size() : std::size_t{0};
-        if ( !w.put('[') ) return false;
-        if constexpr (Pretty) { if ( !w.put('\n') ) return false; }
+        if __JSONREFL_UNLIKELY( !w.put('[') ) { return false; }
+        if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
         bool first = true;
         for ( const auto &elem : v ) {
-            if ( !first ) {
-                if ( !w.put(',') ) return false;
-                if constexpr (Pretty) { if ( !w.put('\n') ) return false; }
+            if __JSONREFL_LIKELY( !first ) {
+                if __JSONREFL_UNLIKELY( !w.put(',') ) { return false; }
+                if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
             }
-            if constexpr (Pretty) { if ( !w.fill(' ', child) ) return false; }
-            if ( !stream_json<Pretty>(w, elem, child) ) return false;
+            if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.fill(' ', child) ) { return false; } }
+            if __JSONREFL_UNLIKELY( !stream_json<Pretty>(w, elem, child) ) { return false; }
             first = false;
         }
         if constexpr (Pretty) {
-            if ( !w.put('\n') ) return false;
-            if ( !w.fill(' ', indent) ) return false;
+            if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; }
+            if __JSONREFL_UNLIKELY( !w.fill(' ', indent) ) { return false; }
         }
+
         return w.put(']');
     } else if constexpr ( is_object_type<U>::value ) {
-        if ( v.empty() ) return w.write("{}", 2);
+        if __JSONREFL_UNLIKELY( v.empty() ) { return w.write("{}", 2); }
         const auto child = Pretty ? indent + k_indent_step.size() : std::size_t{0};
-        if ( !w.put('{') ) return false;
-        if constexpr (Pretty) { if ( !w.put('\n') ) return false; }
+        if __JSONREFL_UNLIKELY( !w.put('{') ) { return false; }
+        if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
         bool first = true;
         for ( const auto &[k, val] : v ) {
-            if ( !first ) {
-                if ( !w.put(',') ) return false;
-                if constexpr (Pretty) { if ( !w.put('\n') ) return false; }
+            if __JSONREFL_LIKELY( !first ) {
+                if __JSONREFL_UNLIKELY( !w.put(',') ) { return false; }
+                if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
             }
-            if constexpr (Pretty) { if ( !w.fill(' ', child) ) return false; }
-            if ( !stream_json<Pretty>(w, k, child) ) return false;
-            if constexpr (Pretty) { if ( !w.write(": ", 2) ) return false; }
-            else { if ( !w.put(':') ) return false; }
-            if ( !stream_json<Pretty>(w, val, child) ) return false;
+            if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.fill(' ', child) ) { return false; } }
+            if __JSONREFL_UNLIKELY( !w.write_quoted_token(k) ) { return false; }
+            if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.write(": ", 2) ) { return false; } }
+            else { if __JSONREFL_UNLIKELY( !w.put(':') ) return false; }
+            if __JSONREFL_UNLIKELY( !stream_json<Pretty>(w, val, child) ) { return false; }
             first = false;
         }
         if constexpr (Pretty) {
-            if ( !w.put('\n') ) return false;
-            if ( !w.fill(' ', indent) ) return false;
+            if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; }
+            if __JSONREFL_UNLIKELY( !w.fill(' ', indent) ) { return false; }
         }
+
         return w.put('}');
     } else if constexpr ( is_optional_type<U>::value ) {
-        if ( v.has_value() ) return stream_json<Pretty>(w, *v, indent);
-        return w.write("null", 4);
+        if __JSONREFL_LIKELY( v.has_value() ) { return stream_json<Pretty>(w, *v, indent); }
+
+        return w.write_token("null", 4);
     } else {
-        return w.write("null", 4);
+        return w.write_token("null", 4);
     }
 }
 
@@ -1446,7 +1560,6 @@ constexpr std::size_t stack_depth() noexcept {
     }
 }
 
-
 // Used for initialize the object of type `object_member_t`
 template<std::size_t N, typename T, typename C>
 constexpr auto object_member(const char (&str)[N], T C::*mptr) noexcept {
@@ -1472,6 +1585,7 @@ std::size_t required_bytes(const T &obj, bool pretty = false) noexcept {
          has_metadata<T>::value || details::is_object_or_array<T>::value
         ,"T must have JSONREFL_METADATA or be a standard container"
     );
+
     return details::required_bytes(obj, pretty, std::size_t{0});
 }
 
@@ -1481,6 +1595,7 @@ char* to_buffer(char *ptr, const T &obj, bool pretty = false) noexcept {
          has_metadata<T>::value || details::is_object_or_array<T>::value
         ,"T must have JSONREFL_METADATA or be a standard container"
     );
+
     return details::write_json(ptr, obj, pretty, std::size_t{0});
 }
 
@@ -1493,25 +1608,48 @@ std::string to_string(const T &obj, bool pretty = false) {
     const auto n = required_bytes(obj, pretty);
     std::string result(n, '\0');
     to_buffer(result.data(), obj, pretty);
+
     return result;
 }
 
-template<typename T, typename Fn>
-bool to_chunked_buffer(char *buf, std::size_t buf_size, const T &obj, Fn &&fn, bool pretty = false) {
+template<typename T, typename Fn, typename AllocFn = void*(*)(std::size_t)>
+bool to_chunked_buffer(
+     char *buf
+    ,std::size_t buf_size
+    ,const T &obj
+    ,Fn &&fn
+    ,bool pretty = false
+    ,AllocFn alloc_fn = &std::malloc
+    ,bool owned = false
+) {
     static_assert(
          has_metadata<T>::value || details::is_object_or_array<T>::value
         ,"T must have JSONREFL_METADATA or be a standard container"
     );
+    assert((!buf ==  owned) && "buf==nullptr requires owned==true, and owned==true requires buf==nullptr");
+    if __JSONREFL_UNLIKELY( owned ) {
+        buf = static_cast<char *>(alloc_fn(buf_size));
+        if __JSONREFL_UNLIKELY( !buf ) { return false; }
+    }
     auto trampoline = [](void *ud, const void *data, std::size_t size) -> bool
     { return (*static_cast<std::remove_reference_t<Fn>*>(ud))(data, size); };
     details::chunked_writer w{buf, buf_size, trampoline, &fn};
-    if ( pretty ) details::stream_json<true>(w, obj, std::size_t{0});
-    else          details::stream_json<false>(w, obj, std::size_t{0});
-    if ( w.ok && w.pos > 0 ) w.flush();
+    if ( pretty ) { details::stream_json<true>(w, obj, std::size_t{0}); }
+    else { details::stream_json<false>(w, obj, std::size_t{0}); }
+    if ( w.ok && w.pos > 0 ) { w.flush(); }
+
     return w.ok;
 }
 
 /*************************************************************************************************/
+
+enum class state : std::uint8_t {
+     ok
+    ,incomplete
+    ,invalid
+    ,extra_data
+    ,no_buffer
+};
 
 template<typename C>
 class parser {
@@ -1541,6 +1679,7 @@ private:
     }
     stack_elem stack_top() const noexcept {
         assert(m_stack_idx >= 0);
+
         return m_stack[m_stack_idx];
     }
 
@@ -1577,14 +1716,15 @@ public:
         } else {
             const auto *setter = top.holder->get(m_key);
             assert(setter);
-            if ( m_accumulating && setter->is_string_view() ) return false;
+            if ( m_accumulating && setter->is_string_view() ) { return false; }
             setter->set(top.addr, val);
-            if ( has_escapes && setter->is_string_like() && !setter->is_string_view() ) {
+            if ( has_escapes && setter->is_string() && !setter->is_string_view() ) {
                 auto *str = static_cast<std::string *>(setter->member_address(top.addr));
                 unescape_inplace(*str);
             }
         }
         m_key = {};
+
         return true;
     }
     void on_null() noexcept {
@@ -1676,7 +1816,6 @@ private:
     std::size_t m_str_len{};
     bool  m_has_esc{};
     bool  m_is_key{};
-    std::string m_accum;
     bool  m_accumulating{};
 
     int   m_uni_remain{};
@@ -1699,33 +1838,37 @@ private:
         }
     }
 
-    void flush_segment(const char *seg_end) {
+    bool flush_segment(std::string *accum, const char *seg_end) {
+        if __JSONREFL_UNLIKELY( !accum ) { return false; }
         if ( !m_accumulating ) {
-            m_accum.assign(m_seg_start, seg_end);
+            accum->assign(m_seg_start, seg_end);
             m_accumulating = true;
         } else {
-            m_accum.append(m_seg_start, seg_end);
+            accum->append(m_seg_start, seg_end);
         }
+
+        return true;
     }
 
-    bool emit_string() {
+    bool emit_string(std::string *accum) {
         std::string_view sv = m_accumulating
-            ? std::string_view{m_accum}
+            ? std::string_view{*accum}
             : std::string_view{m_seg_start, m_str_len}
         ;
         if ( m_is_key ) {
             on_key(sv);
             m_js = jstate::colon;
         } else {
-            if ( !on_str(sv, m_has_esc) ) return false;
+            if ( !on_str(sv, m_has_esc) ) { return false; }
             after_value();
         }
+
         return true;
     }
 
-    void emit_number() {
+    void emit_number(std::string *accum) {
         std::string_view sv = m_accumulating
-            ? std::string_view{m_accum}
+            ? std::string_view{*accum}
             : std::string_view{m_seg_start, m_str_len}
         ;
         on_int(sv);
@@ -1749,10 +1892,11 @@ private:
         for ( auto i = 0u; i < 4u; ++i ) {
             v <<= 4;
             char c = p[i];
-            if ( c >= '0' && c <= '9' )      v += static_cast<unsigned>(c - '0');
-            else if ( c >= 'a' && c <= 'f' ) v += 10u + static_cast<unsigned>(c - 'a');
-            else if ( c >= 'A' && c <= 'F' ) v += 10u + static_cast<unsigned>(c - 'A');
+            if ( c >= '0' && c <= '9' ) { v += static_cast<unsigned>(c - '0'); }
+            else if ( c >= 'a' && c <= 'f' ) { v += 10u + static_cast<unsigned>(c - 'a'); }
+            else if ( c >= 'A' && c <= 'F' ) { v += 10u + static_cast<unsigned>(c - 'A'); }
         }
+
         return v;
     }
 
@@ -1809,7 +1953,9 @@ private:
     }
 
 public:
-    bool parse(std::string_view chunk) {
+    state parse(std::string_view chunk, std::string *accum = nullptr) {
+        if __JSONREFL_UNLIKELY( m_accumulating && !accum ) { return state::no_buffer; }
+
         const char *p = chunk.data();
         const char *const end = p + chunk.size();
 
@@ -1826,29 +1972,31 @@ public:
             case jstate::comma_or_obj_end:
             case jstate::comma_or_arr_end: {
                 while ( p < end && is_ws(*p) ) ++p;
-                if ( p >= end ) return true;
+                if __JSONREFL_UNLIKELY( p >= end ) { return state::incomplete; }
 
                 const char c = *p;
 
                 if ( m_js == jstate::colon ) {
-                    if ( c != ':' ) return false;
+                    if __JSONREFL_UNLIKELY( c != ':' ) { return state::invalid; }
                     ++p;
                     m_js = jstate::value;
                     break;
                 }
                 if ( m_js == jstate::comma_or_obj_end ) {
-                    if ( c == ',' ) { ++p; m_js = jstate::key_or_obj_end; break; }
+                    if __JSONREFL_LIKELY( c == ',' ) { ++p; m_js = jstate::key_or_obj_end; break; }
                     if ( c == '}' ) { ++p; close_object(); ctx_pop(); after_value(); break; }
-                    return false;
+
+                    return state::invalid;
                 }
                 if ( m_js == jstate::comma_or_arr_end ) {
-                    if ( c == ',' ) { ++p; m_js = jstate::value; break; }
+                    if __JSONREFL_LIKELY( c == ',' ) { ++p; m_js = jstate::value; break; }
                     if ( c == ']' ) { ++p; close_array(); ctx_pop(); after_value(); break; }
-                    return false;
+
+                    return state::invalid;
                 }
                 if ( m_js == jstate::key_or_obj_end ) {
                     if ( c == '}' ) { ++p; close_object(); ctx_pop(); after_value(); break; }
-                    if ( c != '"' ) return false;
+                    if __JSONREFL_UNLIKELY( c != '"' ) { return state::invalid; }
                     m_is_key = true;
                     m_has_esc = false;
                     m_accumulating = false;
@@ -1913,7 +2061,8 @@ public:
                         m_js = jstate::in_number;
                         break;
                     }
-                    return false;
+
+                    return state::invalid;
                 }
                 break;
             }
@@ -1921,29 +2070,31 @@ public:
             case jstate::in_string: {
                 while ( p < end ) {
                     const char c = *p;
-                    if ( c == '"' ) {
+                    if __JSONREFL_UNLIKELY( c == '"' ) {
                         m_str_len = static_cast<std::size_t>(p - m_seg_start);
-                        if ( m_accumulating ) m_accum.append(m_seg_start, p);
+                        if __JSONREFL_UNLIKELY( m_accumulating ) { accum->append(m_seg_start, p); }
                         ++p;
-                        if ( !emit_string() ) return false;
+                        if __JSONREFL_UNLIKELY( !emit_string(accum) ) { return state::invalid; }
                         goto next_token;
                     }
-                    if ( c == '\\' ) {
+                    if __JSONREFL_UNLIKELY( c == '\\' ) {
                         m_has_esc = true;
                         ++p;
-                        if ( p >= end ) {
-                            flush_segment(p);
+                        if __JSONREFL_UNLIKELY( p >= end ) {
+                            if __JSONREFL_UNLIKELY( !flush_segment(accum, p) ) { return state::no_buffer; }
                             m_js = jstate::in_escape;
-                            return true;
+
+                            return state::incomplete;
                         }
-                        if ( *p == 'u' ) {
+                        if __JSONREFL_UNLIKELY( *p == 'u' ) {
                             ++p;
                             m_uni_remain = 4;
                             while ( p < end && m_uni_remain > 0 ) { ++p; --m_uni_remain; }
-                            if ( m_uni_remain > 0 ) {
-                                flush_segment(p);
+                            if __JSONREFL_UNLIKELY( m_uni_remain > 0 ) {
+                                if __JSONREFL_UNLIKELY( !flush_segment(accum, p) ) { return state::no_buffer; }
                                 m_js = jstate::in_unicode;
-                                return true;
+
+                                return state::incomplete;
                             }
                         } else {
                             ++p;
@@ -1952,20 +2103,21 @@ public:
                     }
                     ++p;
                 }
-                flush_segment(p);
-                return true;
+                if __JSONREFL_UNLIKELY( !flush_segment(accum, p) ) { return state::no_buffer; }
+
+                return state::incomplete;
             next_token:
                 break;
             }
 
             case jstate::in_escape: {
-                if ( p >= end ) return true;
+                if ( p >= end ) { return state::incomplete; }
                 if ( *p == 'u' ) {
-                    m_accum += *p++;
+                    *accum += *p++;
                     m_uni_remain = 4;
                     m_js = jstate::in_unicode;
                 } else {
-                    m_accum += *p++;
+                    *accum += *p++;
                     m_seg_start = p;
                     m_js = jstate::in_string;
                 }
@@ -1974,7 +2126,7 @@ public:
 
             case jstate::in_unicode: {
                 while ( p < end && m_uni_remain > 0 ) {
-                    m_accum += *p++;
+                    *accum += *p++;
                     --m_uni_remain;
                 }
                 if ( m_uni_remain == 0 ) {
@@ -1986,24 +2138,25 @@ public:
 
             case jstate::in_number: {
                 while ( p < end && is_num_char(*p) ) ++p;
-                if ( p < end ) {
+                if __JSONREFL_LIKELY( p < end ) {
                     m_str_len = static_cast<std::size_t>(p - m_seg_start);
-                    if ( m_accumulating ) m_accum.append(m_seg_start, p);
-                    emit_number();
+                    if __JSONREFL_UNLIKELY( m_accumulating ) { accum->append(m_seg_start, p); }
+                    emit_number(accum);
                 } else {
-                    flush_segment(p);
-                    return true;
+                    if __JSONREFL_UNLIKELY( !flush_segment(accum, p) ) { return state::no_buffer; }
+
+                    return state::incomplete;
                 }
                 break;
             }
 
             case jstate::in_literal: {
                 while ( p < end && m_lit_pos < m_lit_len ) {
-                    if ( *p != m_lit_str[m_lit_pos] ) return false;
+                    if __JSONREFL_UNLIKELY( *p != m_lit_str[m_lit_pos] ) { return state::invalid; }
                     ++p;
                     ++m_lit_pos;
                 }
-                if ( m_lit_pos == m_lit_len ) {
+                if __JSONREFL_LIKELY( m_lit_pos == m_lit_len ) {
                     if ( m_lit_str[0] == 'n' ) {
                         on_null();
                     } else {
@@ -2016,16 +2169,14 @@ public:
 
             case jstate::done: {
                 while ( p < end && is_ws(*p) ) ++p;
-                if ( p < end ) return false;
-                return true;
+                if __JSONREFL_UNLIKELY( p < end ) { return state::extra_data; }
+
+                return state::ok;
             }
             }
         }
-        return true;
-    }
 
-    bool finished() const noexcept {
-        return m_js == jstate::done;
+        return m_js == jstate::done ? state::ok : state::incomplete;
     }
 
     void reset() noexcept {
@@ -2038,7 +2189,6 @@ public:
         m_str_len = {};
         m_has_esc = {};
         m_is_key = {};
-        m_accum.clear();
         m_accumulating = {};
         m_uni_remain = {};
         m_lit_str = {};
