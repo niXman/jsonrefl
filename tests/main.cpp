@@ -33,7 +33,7 @@
                 #expr, __FILE__, __LINE__, __func__);                        \
             std::abort();                                                    \
         }                                                                    \
-    } while(0)
+    } while ( 0 )
 
 #define CHECK_EQ(a, b)                                                       \
     do {                                                                     \
@@ -46,7 +46,7 @@
                       << " in " << __func__ << "()\n";                       \
             std::abort();                                                    \
         }                                                                    \
-    } while(0)
+    } while ( 0 )
 
 /*************************************************************************************************/
 
@@ -55,7 +55,7 @@ void test_int_array() {
 
     constexpr auto &m = jsonrefl::metadata<int_array>();
     CHECK_EQ(m.name(), "int_array");
-    CHECK_EQ(m.size(), 1);
+    CHECK_EQ(m.size(), 1u);
 
     const auto *e0 = m.get("arr");
     CHECK(e0);
@@ -73,7 +73,7 @@ void test_string_array() {
 
     constexpr auto &m = jsonrefl::metadata<string_array>();
     CHECK_EQ(m.name(), "string_array");
-    CHECK_EQ(m.size(), 1);
+    CHECK_EQ(m.size(), 1u);
 
     const auto *e0 = m.get("arr");
     CHECK(e0);
@@ -91,7 +91,7 @@ void test_sv_array() {
 
     constexpr auto &m = jsonrefl::metadata<sv_array>();
     CHECK_EQ(m.name(), "sv_array");
-    CHECK_EQ(m.size(), 1);
+    CHECK_EQ(m.size(), 1u);
 
     const auto *e0 = m.get("arr");
     CHECK(e0);
@@ -109,7 +109,7 @@ void test_metadata_int_string() {
 
     constexpr auto &m = jsonrefl::metadata<int_string>();
     CHECK_EQ(m.name(), "int_string");
-    CHECK_EQ(m.size(), 2);
+    CHECK_EQ(m.size(), 2u);
 
     const auto *e0 = m.get("i");
     CHECK(e0);
@@ -137,7 +137,7 @@ void test_metadata_nested() {
 
     constexpr auto &m = jsonrefl::metadata<nested>();
     CHECK_EQ(m.name(), "nested");
-    CHECK_EQ(m.size(), 3);
+    CHECK_EQ(m.size(), 3u);
 
     const auto *e0 = m.get("i");
     CHECK(e0);
@@ -175,7 +175,7 @@ void test_metadata_nested_with_array() {
 
     constexpr auto &m = jsonrefl::metadata<nested_with_array>();
     CHECK_EQ(m.name(), "nested_with_array");
-    CHECK_EQ(m.size(), 2);
+    CHECK_EQ(m.size(), 2u);
 
     const auto *e0 = m.get("n");
     CHECK(e0);
@@ -203,7 +203,7 @@ void test_metadata_result_t() {
 
     constexpr auto &m = jsonrefl::metadata<myns::result_t>();
     CHECK_EQ(m.name(), "result_t");
-    CHECK_EQ(m.size(), 9);
+    CHECK_EQ(m.size(), 9u);
 
     const auto *e_symbol = m.get("symbol");
     CHECK(e_symbol);
@@ -252,7 +252,7 @@ void test_metadata_rate_limits_t() {
 
     constexpr auto &m = jsonrefl::metadata<myns::rate_limits_t>();
     CHECK_EQ(m.name(), "rate_limits_t");
-    CHECK_EQ(m.size(), 7);
+    CHECK_EQ(m.size(), 7u);
 
     const auto *e_rlt = m.get("rateLimitType");
     CHECK(e_rlt);
@@ -292,7 +292,7 @@ void test_metadata_response_t() {
 
     constexpr auto &m = jsonrefl::metadata<myns::response_t>();
     CHECK_EQ(m.name(), "response_t");
-    CHECK_EQ(m.size(), 6);
+    CHECK_EQ(m.size(), 6u);
 
     const auto *e_id = m.get("id");
     CHECK(e_id);
@@ -370,8 +370,8 @@ void test_calc_max_stack_depth() {
 static std::vector<std::string> split_lines(const std::string &s) {
     std::vector<std::string> lines;
     std::istringstream iss(s);
-    for (std::string line; std::getline(iss, line); )
-        if (!line.empty()) lines.push_back(line);
+    for ( std::string line; std::getline(iss, line); )
+        if ( !line.empty() ) lines.push_back(line);
     return lines;
 }
 
@@ -404,7 +404,7 @@ void test_dump() {
     };
 
     std::vector<std::uint32_t> member_hashes;
-    for (int i = 0; i < 6; ++i) {
+    for ( int i = 0; i < 6; ++i ) {
         const auto &line = lines[1 + i];
 
         // verify hash: "0xHHHHHHHH"
@@ -421,23 +421,21 @@ void test_dump() {
         member_hashes.push_back(expected[i].hash);
     }
 
-    // --- section 2: index (lines[7] = header, lines[8..13] = sorted entries) ---
+    // --- section 2: index (lines[7] = header, lines[8..13] = index entries) ---
     CHECK(lines[7].find("-- hash --") != std::string::npos);
     CHECK(lines[7].find("-- address --") != std::string::npos);
 
     std::vector<std::uint32_t> index_hashes;
-    for (int i = 0; i < 6; ++i) {
+    for ( int i = 0; i < 6; ++i ) {
         const auto &line = lines[8 + i];
         // parse "0xHHHHHHHH: ..."
         auto hash = static_cast<std::uint32_t>(std::stoul(line.substr(2, 8), nullptr, 16));
         index_hashes.push_back(hash);
     }
 
-    // verify index is sorted ascending
-    CHECK(std::is_sorted(index_hashes.begin(), index_hashes.end()));
-
     // verify same set of hashes in both sections
     auto sorted_member = member_hashes;
+    std::sort(index_hashes.begin(), index_hashes.end());
     std::sort(sorted_member.begin(), sorted_member.end());
     CHECK(sorted_member == index_hashes);
 
@@ -532,13 +530,13 @@ static std::vector<myns::response_t> make_test_data() {
     };
 
     std::vector<myns::response_t> data(10);
-    for (std::size_t i = 0; i < 10; ++i) {
+    for ( auto i = 0u; i < 10; ++i ) {
         auto &r = data[i];
         r.id = ids[i];
         r.status = 200 + i;
 
-        std::size_t nresults = 2 + (i % 3);
-        for (std::size_t j = 0; j < nresults; ++j) {
+        auto nresults = 2 + (i % 3);
+        for ( auto j = 0u; j < nresults; ++j ) {
             myns::result_t res;
             res.symbol = symbols[(i + j) % 10];
             res.preventedMatchId = i * 100 + j;
@@ -552,8 +550,8 @@ static std::vector<myns::response_t> make_test_data() {
             r.results.push_back(res);
         }
 
-        std::size_t nrl = 1 + (i % 3);
-        for (std::size_t j = 0; j < nrl; ++j) {
+        auto nrl = 1 + (i % 3);
+        for ( auto j = 0u; j < nrl; ++j ) {
             myns::rate_limits_t rl;
             rl.rateLimitType = rl_types[(i + j) % 3];
             rl.interval = intervals[(i + j) % 4];
@@ -561,7 +559,7 @@ static std::vector<myns::response_t> make_test_data() {
             rl.limit = 50 * (1 + j);
             rl.count = 1 + i + j;
             rl.extra[std::string("key") + std::to_string(j)] = std::string("val") + std::to_string(i);
-            for (std::size_t k = 0; k < 2 + j; ++k)
+            for ( auto k = 0u; k < 2 + j; ++k )
                 rl.codes.push_back(static_cast<int>(100 + i * 10 + k));
             r.rate_limits.push_back(std::move(rl));
         }
@@ -569,7 +567,7 @@ static std::vector<myns::response_t> make_test_data() {
         r.headers["Content-Type"] = "application/json";
         r.headers[std::string("X-Req-") + std::to_string(i)] = std::string("hdr-") + std::to_string(i);
 
-        for (std::size_t w = 0; w < 1 + (i % 3); ++w)
+        for ( auto w = 0u; w < 1 + (i % 3); ++w )
             r.warnings.push_back(warnings_pool[(i + w) % 5]);
     }
 
@@ -1325,7 +1323,7 @@ int main() {
 
         // to_chunked_buffer: test early stop (callback returns false)
         {
-            std::size_t total = 0;
+            auto total = 0u;
             char chunk_buf[32];
             bool ok = jsonrefl::to_chunked_buffer(chunk_buf, sizeof(chunk_buf), resp,
                 [&](const void *, std::size_t size) -> bool {
@@ -1339,7 +1337,7 @@ int main() {
 
         // benchmark on vector of 10 objects
         static const auto test_data = make_test_data();
-        const std::size_t N = test_data.size();
+        const auto N = test_data.size();
 
         // verify correctness: vector serialization vs per-element
         {
@@ -1369,7 +1367,7 @@ int main() {
 
         // print chunks received by callback
         {
-            std::size_t chunk_no = 0;
+            auto chunk_no = 0u;
             char cbuf[1500];
             jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), test_data,
                 [&](const void *data, std::size_t size) -> bool {
@@ -1399,7 +1397,7 @@ int main() {
         char chunk_buf[1500];
 
         // warmup
-        for (int i = 0; i < 100; ++i) {
+        for ( int i = 0; i < 100; ++i ) {
             auto s = jsonrefl::to_string(test_data); (void)s;
             jsonrefl::to_buffer(buf_c.get(), test_data);
             jsonrefl::to_chunked_buffer(chunk_buf, sizeof(chunk_buf), test_data,
@@ -1408,50 +1406,50 @@ int main() {
 
         // to_string compact
         auto t0 = clock::now();
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             auto s = jsonrefl::to_string(test_data); (void)s;
         }
         auto t1 = clock::now();
         // to_string pretty
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             auto s = jsonrefl::to_string(test_data, true); (void)s;
         }
         auto t2 = clock::now();
 
         // required_bytes compact
         auto t3 = clock::now();
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             auto rb = jsonrefl::required_bytes(test_data); (void)rb;
         }
         auto t4 = clock::now();
         // required_bytes pretty
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             auto rb = jsonrefl::required_bytes(test_data, true); (void)rb;
         }
         auto t5 = clock::now();
 
         // to_buffer compact
         auto t6 = clock::now();
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             jsonrefl::to_buffer(buf_c.get(), test_data);
         }
         auto t7 = clock::now();
         // to_buffer pretty
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             jsonrefl::to_buffer(buf_p.get(), test_data, true);
         }
         auto t8 = clock::now();
 
         // to_chunked_buffer compact
         auto t9 = clock::now();
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             jsonrefl::to_chunked_buffer(chunk_buf, sizeof(chunk_buf), test_data,
                 [](const void *, std::size_t) -> bool { return true; }
             );
         }
         auto t10 = clock::now();
         // to_chunked_buffer pretty
-        for (int i = 0; i < ITERS; ++i) {
+        for ( int i = 0; i < ITERS; ++i ) {
             jsonrefl::to_chunked_buffer(chunk_buf, sizeof(chunk_buf), test_data,
                 [](const void *, std::size_t) -> bool { return true; },
                 true
@@ -1709,7 +1707,7 @@ int main() {
         CHECK(p.parse(json) == jsonrefl::state::ok);
 
         CHECK_EQ(obj.arr.size(), 3u);
-        for (const auto &sv : obj.arr) {
+        for ( const auto &sv : obj.arr ) {
             CHECK(sv.data() >= json_begin && sv.data() + sv.size() <= json_end);
         }
 
@@ -1743,9 +1741,9 @@ int main() {
         };
 
         auto is_split_across = [](const std::vector<std::string> &chunks, std::string_view token) -> bool {
-            for (std::size_t i = 0; i + 1 < chunks.size(); ++i) {
+            for ( auto i = 0u; i + 1 < chunks.size(); ++i ) {
                 const auto &c = chunks[i];
-                for (std::size_t overlap = 1; overlap < token.size(); ++overlap) {
+                for ( auto overlap = 1u; overlap < token.size(); ++overlap ) {
                     if ( c.size() >= overlap
                         && c.compare(c.size() - overlap, overlap, token.data(), overlap) == 0
                         && chunks[i + 1].size() >= token.size() - overlap
@@ -1894,7 +1892,7 @@ int main() {
         std::string accum;
         auto p = jsonrefl::make_parser(&parsed);
         jsonrefl::state last = jsonrefl::state::incomplete;
-        for (const auto &chunk : chunks) {
+        for ( const auto &chunk : chunks ) {
             last = p.parse(chunk, &accum);
             if ( last == jsonrefl::state::invalid ) { CHECK(false); break; }
         }

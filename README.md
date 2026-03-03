@@ -9,7 +9,7 @@ No external dependencies. No external code generation. Just one header.
 - **Two macros, zero boilerplate**:
   - `JSONREFL_METADATA(type, members...)` — generate metadata for an existing struct
   - `JSONREFL_STRUCT(type, (type, name)...)` — declare a struct and generate metadata in one shot
-- **Compile-time sorted hash index** — FNV-1a hash + binary search for O(log N) member lookup, no string comparisons at runtime
+- **Compile-time perfect-hash index** — FNV-1a based perfect hashing for near O(1) member lookup, no string comparisons in the hot path
 - **Just one-allocation serialization** — `required_bytes()` computes exact size, `to_buffer()` writes directly into a pre-allocated buffer
 - **Streaming serialization** — `to_chunked_buffer()` writes into a fixed-size buffer with a flush callback, ideal for sockets and constrained memory
 - **Zero-copy deserialization** — `std::string_view` members point directly into the input buffer, no string copying
@@ -213,6 +213,34 @@ auto s1 = p.parse(R"({"host":"local)", &accum);
 
 auto s2 = p.parse(R"(host","port":8080})", &accum);
 // s2 == jsonrefl::state::ok
+```
+
+Realistic loop with `recv()`:
+
+```cpp
+config cfg{};
+std::string accum;
+auto p = jsonrefl::make_parser(&cfg);
+
+std::array<char, 4096> buf{};
+jsonrefl::state st = jsonrefl::state::incomplete;
+
+for (;;) {
+    const auto n = ::recv(fd, buf.data(), buf.size(), 0);
+    if (n <= 0) {
+        break;
+    }
+
+    st = p.parse({buf.data(), static_cast<std::size_t>(n)}, &accum);
+    if (st == jsonrefl::state::ok) {
+        // cfg is fully parsed
+        break;
+    }
+    if (st != jsonrefl::state::incomplete) {
+        // invalid / extra_data / no_buffer -> stop and handle error
+        break;
+    }
+}
 ```
 
 If `accum` is `nullptr` (default) and the parser needs to accumulate across chunk boundaries, `parse()` returns `state::no_buffer`.

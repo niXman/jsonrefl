@@ -53,13 +53,13 @@ static std::vector<myns::response_t> make_test_data() {
     };
 
     std::vector<myns::response_t> data(10);
-    for (std::size_t i = 0; i < 10; ++i) {
+    for ( auto i = 0u; i < 10; ++i ) {
         auto &r = data[i];
         r.id = ids[i];
         r.status = 200 + i;
 
-        std::size_t nresults = 2 + (i % 3);
-        for (std::size_t j = 0; j < nresults; ++j) {
+        auto nresults = 2 + (i % 3);
+        for ( auto j = 0u; j < nresults; ++j ) {
             myns::result_t res;
             res.symbol = symbols[(i + j) % 10];
             res.preventedMatchId = i * 100 + j;
@@ -73,8 +73,8 @@ static std::vector<myns::response_t> make_test_data() {
             r.results.push_back(res);
         }
 
-        std::size_t nrl = 1 + (i % 3);
-        for (std::size_t j = 0; j < nrl; ++j) {
+        auto nrl = 1 + (i % 3);
+        for ( auto j = 0u; j < nrl; ++j ) {
             myns::rate_limits_t rl;
             rl.rateLimitType = rl_types[(i + j) % 3];
             rl.interval = intervals[(i + j) % 4];
@@ -82,7 +82,7 @@ static std::vector<myns::response_t> make_test_data() {
             rl.limit = 50 * (1 + j);
             rl.count = 1 + i + j;
             rl.extra[std::string("key") + std::to_string(j)] = std::string("val") + std::to_string(i);
-            for (std::size_t k = 0; k < 2 + j; ++k)
+            for ( auto k = 0u; k < 2 + j; ++k )
                 rl.codes.push_back(static_cast<int>(100 + i * 10 + k));
             r.rate_limits.push_back(std::move(rl));
         }
@@ -90,7 +90,7 @@ static std::vector<myns::response_t> make_test_data() {
         r.headers["Content-Type"] = "application/json";
         r.headers[std::string("X-Req-") + std::to_string(i)] = std::string("hdr-") + std::to_string(i);
 
-        for (std::size_t w = 0; w < 1 + (i % 3); ++w)
+        for ( auto w = 0u; w < 1 + (i % 3); ++w )
             r.warnings.push_back(warnings_pool[(i + w) % 5]);
     }
 
@@ -101,7 +101,7 @@ static std::vector<myns::response_t> make_test_data() {
 
 int main() {
     static const auto test_data = make_test_data();
-    const std::size_t N = test_data.size();
+    const auto N = test_data.size();
 
     const auto rb_compact = jsonrefl::required_bytes(test_data);
     const auto rb_pretty  = jsonrefl::required_bytes(test_data, true);
@@ -110,7 +110,7 @@ int main() {
 
     // print chunks received by callback
     {
-        std::size_t chunk_no = 0;
+        auto chunk_no = 0u;
         char cbuf[1500];
         jsonrefl::to_chunked_buffer(cbuf, sizeof(cbuf), test_data,
             [&](const void *data, std::size_t size) -> bool {
@@ -131,10 +131,10 @@ int main() {
     std::cout << "total bytes: compact=" << rb_compact
               << " pretty=" << rb_pretty << "\n";
 
-    constexpr long ITERS = 10000;
+    constexpr auto ITERS = 10000u;
     char chunk_buf[1500];
 
-    for (int w = 0; w < 100; ++w) {
+    for ( int w = 0; w < 100; ++w ) {
         auto s = jsonrefl::to_string(test_data); (void)s;
         jsonrefl::to_buffer(buf_c.get(), test_data);
         jsonrefl::to_chunked_buffer(chunk_buf, sizeof(chunk_buf), test_data,
@@ -142,24 +142,24 @@ int main() {
     }
 
     auto t0 = clock::now();
-    for (long i = 0; i < ITERS; ++i) { auto s = jsonrefl::to_string(test_data); (void)s; }
+    for ( auto i = 0u; i < ITERS; ++i ) { auto s = jsonrefl::to_string(test_data); (void)s; }
     auto t1 = clock::now();
-    for (long i = 0; i < ITERS; ++i) { auto s = jsonrefl::to_string(test_data, true); (void)s; }
+    for ( auto i = 0u; i < ITERS; ++i ) { auto s = jsonrefl::to_string(test_data, true); (void)s; }
     auto t2 = clock::now();
-    for (long i = 0; i < ITERS; ++i) { auto rb = jsonrefl::required_bytes(test_data); (void)rb; }
+    for ( auto i = 0u; i < ITERS; ++i ) { auto rb = jsonrefl::required_bytes(test_data); (void)rb; }
     auto t3 = clock::now();
-    for (long i = 0; i < ITERS; ++i) { auto rb = jsonrefl::required_bytes(test_data, true); (void)rb; }
+    for ( auto i = 0u; i < ITERS; ++i ) { auto rb = jsonrefl::required_bytes(test_data, true); (void)rb; }
     auto t4 = clock::now();
-    for (long i = 0; i < ITERS; ++i) { jsonrefl::to_buffer(buf_c.get(), test_data); }
+    for ( auto i = 0u; i < ITERS; ++i ) { jsonrefl::to_buffer(buf_c.get(), test_data); }
     auto t5 = clock::now();
-    for (long i = 0; i < ITERS; ++i) { jsonrefl::to_buffer(buf_p.get(), test_data, true); }
+    for ( auto i = 0u; i < ITERS; ++i ) { jsonrefl::to_buffer(buf_p.get(), test_data, true); }
     auto t6 = clock::now();
-    for (long i = 0; i < ITERS; ++i) {
+    for ( auto i = 0u; i < ITERS; ++i ) {
         jsonrefl::to_chunked_buffer(chunk_buf, sizeof(chunk_buf), test_data,
             [](const void *, std::size_t) -> bool { return true; });
     }
     auto t7 = clock::now();
-    for (long i = 0; i < ITERS; ++i) {
+    for ( auto i = 0u; i < ITERS; ++i ) {
         jsonrefl::to_chunked_buffer(chunk_buf, sizeof(chunk_buf), test_data,
             [](const void *, std::size_t) -> bool { return true; }, true);
     }

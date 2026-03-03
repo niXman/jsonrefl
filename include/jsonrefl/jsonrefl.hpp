@@ -382,8 +382,8 @@ inline std::size_t float_chars_count(double v) noexcept {
         ,1e300, 1e301, 1e302, 1e303, 1e304, 1e305, 1e306, 1e307, 1e308
     };
     if ( v != v ) { return 3; }
-    std::size_t n = (v < 0.0) ? 1 : 0;
-    const double av = v < 0.0 ? -v : v;
+    const auto n = (v < 0.0) ? 1 : 0;
+    const auto av = v < 0.0 ? -v : v;
     if ( av * 0.0 != 0.0 ) { return n + 3; }
     const auto it = upper_bound(pow10, pow10 + sizeof(pow10)/sizeof(pow10[0]), av);
     auto int_digits = static_cast<std::size_t>(it - pow10);
@@ -397,7 +397,7 @@ std::size_t required_bytes(const U &v, bool pretty, std::size_t indent) noexcept
     if constexpr ( has_metadata<U>::value ) {
         return metadata<U>().required_bytes(&v, pretty, indent);
     } else if constexpr ( is_string_like_t<U>::value ) {
-        std::size_t n = 2;
+        auto n = 2u;
         for ( char c : v ) {
             n += 1 + k_esc.extra[static_cast<unsigned char>(c)];
         }
@@ -407,7 +407,7 @@ std::size_t required_bytes(const U &v, bool pretty, std::size_t indent) noexcept
         return v ? 4 : 5;
     } else if constexpr ( std::is_integral_v<U> ) {
         if ( v == 0 ) { return 1; }
-        std::size_t n = 0;
+        auto n = 0u;
         if constexpr ( std::is_signed_v<U> ) {
             if ( v < 0 ) { n = 1; }
         }
@@ -420,7 +420,7 @@ std::size_t required_bytes(const U &v, bool pretty, std::size_t indent) noexcept
     } else if constexpr ( is_array_type<U>::value ) {
         if ( v.empty() ) { return 2; }
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
-        std::size_t n = 1;
+        auto n = 1u;
         if ( pretty ) { n += 1; }
         bool first = true;
         for ( const auto &elem : v ) {
@@ -439,7 +439,7 @@ std::size_t required_bytes(const U &v, bool pretty, std::size_t indent) noexcept
     } else if constexpr ( is_object_type<U>::value ) {
         if ( v.empty() ) { return 2; }
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
-        std::size_t n = 1;
+        auto n = 1u;
         if ( pretty ) { n += 1; }
         bool first = true;
         for ( const auto &[k, val] : v ) {
@@ -615,7 +615,7 @@ struct chunked_writer {
     }
 
     bool write_quoted_token(std::string_view sv) noexcept {
-        std::size_t total = 2;
+        auto total = 2u;
         for ( auto c : sv )
             total += k_esc.replacement[static_cast<unsigned char>(c)] ? 2 : 1;
         if __JSONREFL_UNLIKELY( capacity - pos < total ) {
@@ -655,20 +655,20 @@ struct chunked_writer {
 
     template<bool Pretty>
     bool write_field_key(std::string_view name, bool first, std::size_t indent) noexcept {
-        const std::size_t pfx = first ? std::size_t{0} : (Pretty ? std::size_t{2} : std::size_t{1});
-        const std::size_t ind = Pretty ? indent : std::size_t{0};
-        const std::size_t total = pfx + ind + 1 + name.size() + (Pretty ? 3 : 2);
+        const auto pfx = first ? std::size_t{0} : (Pretty ? std::size_t{2} : std::size_t{1});
+        const auto ind = Pretty ? indent : std::size_t{0};
+        const auto total = pfx + ind + 1 + name.size() + (Pretty ? 3 : 2);
         if __JSONREFL_UNLIKELY( capacity - pos < total && !flush() ) { return false; }
         if __JSONREFL_LIKELY( capacity - pos >= total ) {
             if ( !first ) {
                 buf[pos++] = ',';
-                if constexpr (Pretty) { buf[pos++] = '\n'; }
+                if constexpr ( Pretty ) { buf[pos++] = '\n'; }
             }
-            if constexpr (Pretty) { std::memset(buf + pos, ' ', indent); pos += indent; }
+            if constexpr ( Pretty ) { std::memset(buf + pos, ' ', indent); pos += indent; }
             buf[pos++] = '"';
             std::memcpy(buf + pos, name.data(), name.size());
             pos += name.size();
-            if constexpr (Pretty) {
+            if constexpr ( Pretty ) {
                 std::memcpy(buf + pos, "\": ", 3); pos += 3;
             } else {
                 std::memcpy(buf + pos, "\":", 2); pos += 2;
@@ -678,12 +678,12 @@ struct chunked_writer {
         }
         if ( !first ) {
             if ( !put(',') ) { return false; }
-            if constexpr (Pretty) { if ( !put('\n') ) { return false; } }
+            if constexpr ( Pretty ) { if ( !put('\n') ) { return false; } }
         }
-        if constexpr (Pretty) { if ( !fill(' ', indent) ) { return false; } }
+        if constexpr ( Pretty ) { if ( !fill(' ', indent) ) { return false; } }
         if ( !put('"') ) { return false; }
         if ( !write(name.data(), name.size()) ) { return false; }
-        if constexpr (Pretty) { return write("\": ", 3); }
+        if constexpr ( Pretty ) { return write("\": ", 3); }
         else { return write("\":", 2); }
     }
 
@@ -885,8 +885,8 @@ class setter_t final: public setter_base {
 
 public:
     constexpr setter_t(T C::*ptr) noexcept
-        : setter_base{setter_base::template deduce_member_kind<inner_type>(), jsonrefl::has_metadata<inner_type>::value}
-        , m_ptr{ptr}
+        :setter_base{setter_base::template deduce_member_kind<inner_type>(), jsonrefl::has_metadata<inner_type>::value}
+        ,m_ptr{ptr}
     {}
 
     const object_holder_base* get_metadata() const noexcept override {
@@ -1004,7 +1004,7 @@ class root_setter_t final: public setter_base {
 
 public:
     constexpr root_setter_t() noexcept
-        : setter_base{setter_base::template deduce_root_kind<T>(), false}
+        :setter_base{setter_base::template deduce_root_kind<T>(), false}
     {}
 
     const object_holder_base* get_metadata() const noexcept override { return nullptr; }
@@ -1055,153 +1055,139 @@ const root_setter_t<T>* root_setter_ptr() noexcept {
 
 /*************************************************************************************************/
 
-template<class T>
-constexpr void cswap(T &a, T &b) {
-    auto tmp = a;
-    a = b;
-    b = tmp;
+constexpr std::size_t next_pow2(std::size_t v) noexcept {
+    auto p = 1u;
+    while ( p < v ) { p <<= 1; }
+
+    return p;
 }
 
-template<class T, class U>
-constexpr void cswap(std::pair<T, U> &a, std::pair<T, U> &b) {
-    cswap(a.first, b.first);
-    cswap(a.second, b.second);
+template<std::size_t M>
+constexpr std::size_t phf_slot(std::uint32_t hash, std::uint32_t mult, std::uint32_t seed) noexcept {
+    static_assert((M & (M - 1)) == 0, "M must be a power of two");
+    return static_cast<std::size_t>(
+        (static_cast<std::uint64_t>(hash) * static_cast<std::uint64_t>(mult) + static_cast<std::uint64_t>(seed))
+        & static_cast<std::uint64_t>(M - 1)
+    );
 }
 
-template<typename Iterator, class Compare>
-constexpr Iterator qsort_partition(Iterator left, Iterator right, Compare const &compare) {
-    auto pivot = left + (right - left) / 2;
-    cswap(*right, *pivot);
-    pivot = right;
-    for ( auto it = left; 0 < right - it; ++it ) {
-        if ( compare(*it, *pivot) ) {
-            cswap(*it, *left);
-            left++;
+template<std::size_t N, std::size_t M>
+struct phf_index {
+    struct index_elem_type {
+        std::uint32_t hash{};
+        const setter_base *setter{};
+    };
+
+    std::uint32_t mult{1};
+    std::uint32_t seed{0};
+    bool perfect{true};
+    std::array<index_elem_type, M> table{};
+    std::array<bool, M> used{};
+
+    constexpr const setter_base* get(std::uint32_t hash) const noexcept {
+        auto idx = phf_slot<M>(hash, mult, seed);
+        if ( perfect ) {
+            if ( !used[idx] ) { return nullptr; }
+            const auto &elem = table[idx];
+            return elem.hash == hash ? elem.setter : nullptr;
+        }
+
+        for ( auto i = 0u; i < M && used[idx]; ++i ) {
+            const auto &elem = table[idx];
+            if ( elem.hash == hash ) { return elem.setter; }
+            idx = (idx + 1) & (M - 1);
+        }
+
+        return nullptr;
+    }
+};
+
+template<std::size_t N, std::size_t M>
+constexpr auto make_phf_index(const std::array<std::pair<std::uint32_t, const setter_base *>, N> &src) noexcept {
+    phf_index<N, M> out{};
+    if constexpr ( N == 0 ) {
+        return out;
+    }
+
+    if constexpr ( N <= 12 ) {
+        for ( std::uint32_t mult = 1; mult < 128; mult += 2 ) {
+            for ( std::uint32_t seed = 0; seed < 512; ++seed ) {
+                std::array<bool, M> probe{};
+                bool ok = true;
+                for ( const auto &elem: src ) {
+                    const auto idx = phf_slot<M>(elem.first, mult, seed);
+                    if ( probe[idx] ) {
+                        ok = false;
+                        break;
+                    }
+                    probe[idx] = true;
+                }
+                if ( !ok ) { continue; }
+
+                out.mult = mult;
+                out.seed = seed;
+                out.perfect = true;
+                out.used = probe;
+                for ( const auto &elem: src ) {
+                    out.table[phf_slot<M>(elem.first, mult, seed)] = {elem.first, elem.second};
+                }
+
+                return out;
+            }
         }
     }
-    cswap(*pivot, *left);
-    pivot = left;
 
-    return pivot;
-}
-
-template<typename Iterator, class Compare>
-constexpr void qsort(Iterator left, Iterator right, Compare const &compare) {
-    while ( 0 < right - left ) {
-        auto new_pivot = qsort_partition(left, right, compare);
-        qsort(left, new_pivot, compare);
-        left = new_pivot + 1;
+    // Guaranteed-correct fallback with linear probing.
+    out.mult = 1;
+    out.seed = 0;
+    out.perfect = false;
+    for ( auto &flag: out.used ) { flag = false; }
+    for ( const auto &elem: src ) {
+        auto idx = phf_slot<M>(elem.first, out.mult, out.seed);
+        while ( out.used[idx] ) {
+            idx = (idx + 1) & (M - 1);
+        }
+        out.used[idx] = true;
+        out.table[idx] = {elem.first, elem.second};
     }
+
+    return out;
 }
 
-template<typename Container, class Compare>
-constexpr Container qsort(Container array, Compare const &compare) {
-    qsort(array.begin(), array.end() - 1, compare);
-
-    return array;
-}
-
-template<typename T = void>
-struct less {
-    constexpr bool operator()(const T &a, const T &b) const noexcept(noexcept(a < b))
-    { return a < b; }
-};
-
-template<>
-struct less<void> {
-    template<typename A, typename B>
-    constexpr bool operator()(const A &a, const B &b) const noexcept(noexcept(a < b))
-    { return a < b; }
-};
-
-template<std::size_t N, typename T, typename CmpLess = less<T>>
-struct sorted_vector {
-    using storage_type = std::array<T, N>;
-private:
-    storage_type m_data;
-    constexpr sorted_vector(storage_type arr)
-        :m_data{qsort(std::move(arr), CmpLess{})}
-    {}
-public:
-    template<typename ...U>
-    constexpr sorted_vector(U ...elems)
-        :sorted_vector{storage_type{std::move(elems)...}}
-    {}
-
-    constexpr auto  size()  const noexcept { return N; }
-    constexpr auto* begin() const noexcept { return m_data.begin(); }
-    constexpr auto* end  () const noexcept { return m_data.end(); }
-    constexpr auto& operator[](std::size_t i) const noexcept { return m_data[i]; }
-};
-
-template<typename T, typename CmpLess>
-struct sorted_vector<1, T, CmpLess> {
-    using storage_type = std::array<T, 1>;
-private:
-    storage_type m_data;
-public:
-    constexpr sorted_vector(T x)
-        :m_data{std::move(x)}
-    {}
-
-    constexpr auto  size()  const noexcept { return 1; }
-    constexpr auto* begin() const noexcept { return m_data.begin(); }
-    constexpr auto* end  () const noexcept { return m_data.end(); }
-    constexpr auto& operator[](std::size_t i) const noexcept { return m_data[i]; }
-};
-
-template<typename T, typename CmpLess>
-struct sorted_vector<0, T, CmpLess> {
-    constexpr sorted_vector() {}
-
-    constexpr auto  size()  const noexcept { return 0; }
-    constexpr T*    begin() const noexcept { return nullptr; }
-    constexpr T*    end  () const noexcept { return nullptr; }
-    constexpr auto& operator[](std::size_t /*i*/) const { throw jsonrefl::exception("zero size vector!"); }
-};
-
-template<typename CmpLess, typename T, typename ...Ts>
-constexpr auto make_sorted_vector(CmpLess, T &&t, Ts && ...ts) {
-    return sorted_vector<1 + sizeof...(Ts), std::decay_t<T>, CmpLess>{
-        std::forward<T>(t), std::forward<Ts>(ts)...};
-}
-
-/*************************************************************************************************/
-
-template<std::size_t ...Ids, typename CmpLess, typename ...TupleElems>
-constexpr auto make_index(std::index_sequence<Ids...>, const CmpLess &less, const std::tuple<TupleElems...> &tuple) noexcept {
-    auto res = make_sorted_vector(
-        less
-        ,std::make_pair(
-             std::get<Ids>(tuple).hash
-            ,static_cast<const setter_base *>(&(std::get<Ids>(tuple).member))
-        )...
-    );
-
-    return res;
+template<std::size_t M, std::size_t ...Ids, typename ...TupleElems>
+constexpr auto make_phf_index(std::index_sequence<Ids...>, const std::tuple<TupleElems...> &tuple) noexcept {
+    constexpr auto N = sizeof...(TupleElems);
+    if constexpr ( N == 0 ) {
+        return phf_index<0, M>{};
+    } else {
+        return make_phf_index<N, M>(std::array<std::pair<std::uint32_t, const setter_base *>, N>{{
+            std::make_pair(
+                 std::get<Ids>(tuple).hash
+                ,static_cast<const setter_base *>(&(std::get<Ids>(tuple).member))
+            )...
+        }});
+    }
 }
 
 /*************************************************************************************************/
 
 struct object_holder_base {
     using index_elem_type = std::pair<std::uint32_t, const setter_base *>;
+    using get_fn_t = const setter_base* (*)(const void *ctx, std::uint32_t hash) noexcept;
 
 private:
-    const index_elem_type *const m_beg;
-    const index_elem_type *const m_end;
+    const void *m_ctx;
+    get_fn_t m_get;
+    std::size_t m_size;
 
 public:
-    constexpr object_holder_base(
-         const index_elem_type * const beg
-        ,const index_elem_type * const end
-    )
-        :m_beg{beg}
-        ,m_end{end}
+    constexpr object_holder_base(const void *ctx, get_fn_t get, std::size_t size)
+        :m_ctx{ctx}
+        ,m_get{get}
+        ,m_size{size}
     {}
 
-    constexpr const auto* begin() const noexcept { return m_beg; }
-    constexpr const auto* end()   const noexcept { return m_end; }
-    constexpr auto size() const noexcept { return m_end - m_beg; }
+    constexpr auto size() const noexcept { return m_size; }
     constexpr auto empty() const noexcept { return size() == 0; }
 
     const setter_base* get(std::string_view key) const noexcept {
@@ -1209,21 +1195,7 @@ public:
             return nullptr;
         }
 
-        const auto hash = fnv1a(key);
-        const auto *it = details::lower_bound(m_beg, m_end, hash);
-
-        return (it != m_end && it->first == hash)
-            ? it->second
-            : nullptr
-        ;
-    }
-
-    virtual std::size_t required_bytes(const void * /*obj*/, bool /*pretty*/, std::size_t /*indent*/) const noexcept { return 2; }
-    virtual char* to_buffer(const void * /*obj*/, char *ptr, bool /*pretty*/, std::size_t /*indent*/) const noexcept {
-        std::memcpy(ptr, "{}", 2); return ptr + 2;
-    }
-    virtual bool to_stream(const void * /*obj*/, chunked_writer &w, bool /*pretty*/, std::size_t /*indent*/) const noexcept {
-        return w.write("{}", 2);
+        return m_get(m_ctx, fnv1a(key));
     }
 };
 
@@ -1231,24 +1203,24 @@ public:
 
 template<typename ...Types>
 class object_holder_t final: public object_holder_base {
-    using cmp_less = less<std::pair<std::uint32_t, const setter_base *>>;
-    using index_type = sorted_vector<
-         sizeof...(Types)
-        ,object_holder_base::index_elem_type
-        ,cmp_less
-    >;
+    static constexpr auto phf_table_size = next_pow2((sizeof...(Types) == 0) ? 1u : sizeof...(Types) * 4u);
+    using phf_index_type = phf_index<sizeof...(Types), phf_table_size>;
 
     const std::string_view m_name;
     const std::tuple<Types...> m_tuple;
-    const index_type m_index;
+    const phf_index_type m_phf;
     const std::size_t m_max_name_len;
+
+    static const setter_base* get_by_hash_thunk(const void *ctx, std::uint32_t hash) noexcept {
+        return static_cast<const object_holder_t *>(ctx)->m_phf.get(hash);
+    }
 public:
     template<typename ...Args>
     constexpr object_holder_t(std::string_view name, Args && ...args)
-        :object_holder_base{std::begin(m_index), std::end(m_index)}
+        :object_holder_base{this, get_by_hash_thunk, sizeof...(Types)}
         ,m_name{name}
         ,m_tuple{std::forward<Args>(args)...}
-        ,m_index{make_index(std::index_sequence_for<Types...>{}, cmp_less{}, m_tuple)}
+        ,m_phf{make_phf_index<phf_table_size>(std::index_sequence_for<Types...>{}, m_tuple)}
         ,m_max_name_len{details::mymax(args.name.length()...)}
     {}
 
@@ -1291,24 +1263,28 @@ public:
         // print index
         os << "-- hash --  -- address --" << std::endl;
         auto flags = os.flags();
-        for ( const auto &it: m_index ) {
+        for ( auto i = 0u; i < phf_table_size; ++i ) {
+            if ( !m_phf.used[i] ) {
+                continue;
+            }
+            const auto &it = m_phf.table[i];
             os << "0x";
 
             auto width = os.width(8);
             auto fillc = os.fill('0');
-            os << std::hex << it.first;
+            os << std::hex << it.hash;
 
             os.width(width);
             os.fill(fillc);
-            os << ": " << it.second << std::endl;
+            os << ": " << it.setter << std::endl;
         }
         os.flags(flags);
 
         return os;
     }
 
-    std::size_t required_bytes(const void *obj, bool pretty, std::size_t indent) const noexcept override {
-        std::size_t n = 1;
+    std::size_t required_bytes(const void *obj, bool pretty, std::size_t indent) const noexcept {
+        auto n = 1u;
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
         if ( pretty && sizeof...(Types) > 0 ) { n += 1; }
         bool first = true;
@@ -1337,7 +1313,7 @@ public:
         return n;
     }
 
-    char* to_buffer(const void *obj, char *ptr, bool pretty, std::size_t indent) const noexcept override {
+    char* to_buffer(const void *obj, char *ptr, bool pretty, std::size_t indent) const noexcept {
         const auto child = pretty ? indent + k_indent_step.size() : std::size_t{0};
         *ptr++ = '{';
         if ( pretty && sizeof...(Types) > 0 ) { *ptr++ = '\n'; }
@@ -1374,7 +1350,7 @@ public:
         return ptr;
     }
 
-    bool to_stream(const void *obj, chunked_writer &w, bool pretty, std::size_t indent) const noexcept override {
+    bool to_stream(const void *obj, chunked_writer &w, bool pretty, std::size_t indent) const noexcept {
         return pretty
             ? to_stream_impl<true>(obj, w, indent)
             : to_stream_impl<false>(obj, w, indent);
@@ -1384,7 +1360,7 @@ public:
     bool to_stream_impl(const void *obj, chunked_writer &w, std::size_t indent) const noexcept {
         const auto child = Pretty ? indent + k_indent_step.size() : std::size_t{0};
         if __JSONREFL_UNLIKELY( !w.put('{') ) { return false; }
-        if constexpr (Pretty) { if __JSONREFL_UNLIKELY( sizeof...(Types) > 0 && !w.put('\n') ) { return false; } }
+        if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( sizeof...(Types) > 0 && !w.put('\n') ) { return false; } }
         bool first = true;
         bool ok = true;
         std::apply(
@@ -1400,7 +1376,7 @@ public:
             ,m_tuple
         );
         if __JSONREFL_UNLIKELY( !ok ) { return false; }
-        if constexpr (Pretty) {
+        if constexpr ( Pretty ) {
             if ( !first ) {
                 if ( !w.put('\n') ) { return false; }
                 if ( !w.fill(' ', indent) ) { return false; }
@@ -1465,18 +1441,18 @@ bool stream_json(chunked_writer &w, const U &v, std::size_t indent) noexcept {
         if __JSONREFL_UNLIKELY( v.empty() ) { return w.write("[]", 2); }
         const auto child = Pretty ? indent + k_indent_step.size() : std::size_t{0};
         if __JSONREFL_UNLIKELY( !w.put('[') ) { return false; }
-        if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
+        if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
         bool first = true;
         for ( const auto &elem : v ) {
             if __JSONREFL_LIKELY( !first ) {
                 if __JSONREFL_UNLIKELY( !w.put(',') ) { return false; }
-                if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
+                if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
             }
-            if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.fill(' ', child) ) { return false; } }
+            if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( !w.fill(' ', child) ) { return false; } }
             if __JSONREFL_UNLIKELY( !stream_json<Pretty>(w, elem, child) ) { return false; }
             first = false;
         }
-        if constexpr (Pretty) {
+        if constexpr ( Pretty ) {
             if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; }
             if __JSONREFL_UNLIKELY( !w.fill(' ', indent) ) { return false; }
         }
@@ -1486,21 +1462,21 @@ bool stream_json(chunked_writer &w, const U &v, std::size_t indent) noexcept {
         if __JSONREFL_UNLIKELY( v.empty() ) { return w.write("{}", 2); }
         const auto child = Pretty ? indent + k_indent_step.size() : std::size_t{0};
         if __JSONREFL_UNLIKELY( !w.put('{') ) { return false; }
-        if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
+        if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
         bool first = true;
         for ( const auto &[k, val] : v ) {
             if __JSONREFL_LIKELY( !first ) {
                 if __JSONREFL_UNLIKELY( !w.put(',') ) { return false; }
-                if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
+                if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; } }
             }
-            if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.fill(' ', child) ) { return false; } }
+            if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( !w.fill(' ', child) ) { return false; } }
             if __JSONREFL_UNLIKELY( !w.write_quoted_token(k) ) { return false; }
-            if constexpr (Pretty) { if __JSONREFL_UNLIKELY( !w.write(": ", 2) ) { return false; } }
+            if constexpr ( Pretty ) { if __JSONREFL_UNLIKELY( !w.write(": ", 2) ) { return false; } }
             else { if __JSONREFL_UNLIKELY( !w.put(':') ) return false; }
             if __JSONREFL_UNLIKELY( !stream_json<Pretty>(w, val, child) ) { return false; }
             first = false;
         }
-        if constexpr (Pretty) {
+        if constexpr ( Pretty ) {
             if __JSONREFL_UNLIKELY( !w.put('\n') ) { return false; }
             if __JSONREFL_UNLIKELY( !w.fill(' ', indent) ) { return false; }
         }
