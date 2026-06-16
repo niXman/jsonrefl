@@ -477,14 +477,27 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $gcc.DirectoryName
 
       - name: Restore Boost (headers + Charconv)
-        id: boost-cache
-        uses: actions/cache@v4
+        id: boost-cache-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v${{ matrix.boost_cache_key == 'clang-cl' && '5' || '4' }}
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v6
+
+      - name: Verify Boost Charconv artifacts
+        id: boost-charconv
+        run: |
+          set -euo pipefail
+          libdir="${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}/stage/lib"
+          if compgen -G "${libdir}/*boost_charconv*" > /dev/null 2>&1; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Boost.Charconv library missing under ${libdir} (stale or incomplete cache)" >&2
+            ls -la "${libdir}" 2>&1 || true
+          fi
 
       - name: Fetch and build Boost Charconv
-        if: steps.boost-cache.outputs.cache-hit != 'true'
+        if: steps.boost-charconv.outputs.ready != 'true'
         run: |
           set -euxo pipefail
           mkdir -p "${{ github.workspace }}/opt"
@@ -492,9 +505,12 @@ jobs:
           ver="${{ matrix.boost_version }}"
           ver_us="${ver//./_}"
           archive="boost_${ver_us}.tar.bz2"
-          curl -fsSL "https://archives.boost.io/release/${ver}/source/${archive}" -o "${archive}"
-          tar -xjf "${archive}"
-          cd "${{ env.BOOST_CI_FOLDER }}"
+          folder="${{ env.BOOST_CI_FOLDER }}"
+          if [ ! -d "${folder}" ]; then
+            curl -fsSL "https://archives.boost.io/release/${ver}/source/${archive}" -o "${archive}"
+            tar -xjf "${archive}"
+          fi
+          cd "${folder}"
           if [ "${{ runner.os }}" = "Linux" ]; then
             ./bootstrap.sh
             ./b2 -j"$(nproc)" --with-charconv link=static threading=multi variant=release stage
@@ -519,6 +535,19 @@ jobs:
             "${B2}" -j"${j}" toolset=gcc address-model=64 \
               --with-charconv link=static threading=multi variant=release stage
           fi
+          libdir="${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}/stage/lib"
+          if ! compgen -G "${libdir}/*boost_charconv*" > /dev/null 2>&1; then
+            echo "b2 did not produce Boost.Charconv under ${libdir}" >&2
+            ls -la "${libdir}" 2>&1 || true
+            exit 1
+          fi
+
+      - name: Save Boost (headers + Charconv)
+        if: steps.boost-charconv.outputs.ready != 'true' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v6
 
       - name: Configure, build, tests + validation + benchmark
         env:

@@ -19,36 +19,35 @@ function(jsonrefl_apply_boost target_name)
     endif()
     if(JSONREFL_USE_BOOST_CHARCONV AND CMAKE_CXX_STANDARD VERSION_LESS 17)
         target_compile_definitions(${target_name} PRIVATE JSONREFL_USE_BOOST_CHARCONV)
-        find_library(
-            _jsonrefl_boost_charconv_lib
-            NAMES boost_charconv libboost_charconv
-            NAMES_PER_DIR
-            PATHS "${JSONREFL_BOOST_LIBRARY_DIR}"
-            PATH_SUFFIXES ""
-            NO_DEFAULT_PATH
+        set(_jsonrefl_boost_charconv_lib "")
+        file(GLOB _jsonrefl_boost_charconv_glob
+            "${JSONREFL_BOOST_LIBRARY_DIR}/libboost_charconv*.lib"
+            "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.lib"
+            "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.a"
+            "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.so"
+            "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.so.*"
         )
-        if(NOT _jsonrefl_boost_charconv_lib OR NOT EXISTS "${_jsonrefl_boost_charconv_lib}")
-            set(_jsonrefl_boost_charconv_lib "")
-            file(GLOB _jsonrefl_boost_charconv_glob
-                "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.lib"
-                "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.a"
-                "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.so"
-                "${JSONREFL_BOOST_LIBRARY_DIR}/*boost_charconv*.so.*"
-            )
-            if(_jsonrefl_boost_charconv_glob)
-                set(_jsonrefl_boost_charconv_lib "")
-                foreach(_cand IN LISTS _jsonrefl_boost_charconv_glob)
-                    if(_cand MATCHES "[.]dll[.]a$")
-                        continue()
-                    endif()
-                    set(_jsonrefl_boost_charconv_lib "${_cand}")
-                    break()
-                endforeach()
-                if(NOT _jsonrefl_boost_charconv_lib)
-                    list(SORT _jsonrefl_boost_charconv_glob)
-                    list(GET _jsonrefl_boost_charconv_glob 0 _jsonrefl_boost_charconv_lib)
+        if(_jsonrefl_boost_charconv_glob)
+            foreach(_cand IN LISTS _jsonrefl_boost_charconv_glob)
+                if(_cand MATCHES "[.]dll[.]a$")
+                    continue()
                 endif()
+                set(_jsonrefl_boost_charconv_lib "${_cand}")
+                break()
+            endforeach()
+            if(NOT _jsonrefl_boost_charconv_lib)
+                list(SORT _jsonrefl_boost_charconv_glob)
+                list(GET _jsonrefl_boost_charconv_glob 0 _jsonrefl_boost_charconv_lib)
             endif()
+        else()
+            find_library(
+                _jsonrefl_boost_charconv_lib
+                NAMES boost_charconv libboost_charconv
+                NAMES_PER_DIR
+                PATHS "${JSONREFL_BOOST_LIBRARY_DIR}"
+                PATH_SUFFIXES ""
+                NO_DEFAULT_PATH
+            )
         endif()
         if(_jsonrefl_boost_charconv_lib AND EXISTS "${_jsonrefl_boost_charconv_lib}")
             target_link_libraries(${target_name} PRIVATE "${_jsonrefl_boost_charconv_lib}")
