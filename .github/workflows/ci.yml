@@ -481,7 +481,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v3
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v${{ matrix.boost_cache_key == 'clang-cl' && '4' || '3' }}
 
       - name: Fetch and build Boost Charconv
         if: steps.boost-cache.outputs.cache-hit != 'true'
