@@ -1,0 +1,614 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  # C++14: same Boost tree as CI (headers only via extract, or Charconv via b2 in cpp14-boost).
+  BOOST_CI_VERSION: 1.85.0
+  BOOST_CI_FOLDER: boost_1_85_0
+
+jobs:
+  # Full compiler matrix: std::charconv only, no Boost.
+  cpp17:
+    name: ${{ matrix.name }} · C++17 (no Boost)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-gcc
+            os: ubuntu-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: gcc
+            cxx_compiler: g++
+
+          - name: ubuntu-clang
+            os: ubuntu-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: clang
+            cxx_compiler: clang++
+
+          - name: windows-msvc
+            os: windows-latest
+            generator: Visual Studio 17 2022
+            msvc: true
+
+          - name: windows-clang-cl
+            os: windows-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: clang-cl
+            cxx_compiler: clang-cl
+
+          - name: windows-mingw
+            os: windows-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: gcc
+            cxx_compiler: g++
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Ninja (Windows)
+        if: runner.os == 'Windows' && matrix.generator == 'Ninja'
+        run: choco install ninja -y
+
+      - name: MSVC environment (clang-cl)
+        if: matrix.name == 'windows-clang-cl'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: MSVC environment (ASan runtime PATH for tests)
+        if: matrix.name == 'windows-msvc'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: MinGW-w64 (niXman binaries)
+        if: matrix.name == 'windows-mingw'
+        shell: pwsh
+        env:
+          MINGW_URL: https://github.com/niXman/mingw-builds-binaries/releases/download/15.2.0-rt_v13-rev1/x86_64-15.2.0-release-win32-seh-ucrt-rt_v13-rev1.7z
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "mingw-win64.7z"
+          Invoke-WebRequest -Uri $env:MINGW_URL -OutFile $archive -UseBasicParsing
+          $sevenZip = Join-Path ${env:ProgramFiles} "7-Zip\7z.exe"
+          if (-not (Test-Path $sevenZip)) {
+            $sevenZip = "7z"
+          }
+          $unpackRoot = Join-Path $env:RUNNER_TEMP "mingw-unpack"
+          New-Item -ItemType Directory -Force -Path $unpackRoot | Out-Null
+          & $sevenZip x $archive "-o$unpackRoot" -y
+          $gcc = Get-ChildItem -Path $unpackRoot -Recurse -Filter gcc.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $gcc) { throw "gcc.exe not found under $unpackRoot after extracting MinGW" }
+          Add-Content -Path $env:GITHUB_PATH -Value $gcc.DirectoryName
+
+      - name: Configure, build, tests + validation + benchmark
+        run: |
+          set -euxo pipefail
+          STD="-DJSONREFL_CXX_STANDARD=17"
+          SAN="-DENABLE_ASAN=ON -DENABLE_UBSAN=ON"
+          if [ "${{ matrix.name }}" = "windows-mingw" ]; then
+            SAN=""
+          fi
+          first_exe() {
+            local d="$1" base="$2" c
+            for c in "${d}/Release/${base}.exe" "${d}/Debug/${base}.exe" "${d}/${base}.exe" "${d}/${base}"; do
+              if [ -f "${c}" ]; then
+                printf '%s\n' "${c}"
+                return 0
+              fi
+            done
+            printf '%s\n' "missing ${base} under ${d}:" >&2
+            ls -la "${d}" >&2 || true
+            exit 127
+          }
+          jsonrefl_win_root() {
+            if command -v cygpath >/dev/null 2>&1; then
+              cygpath -aw "$PWD"
+              return
+            fi
+            local _w
+            _w="$(pwd -W 2>/dev/null)" || true
+            if [ -n "${_w}" ]; then
+              printf '%s' "${_w}"
+              return
+            fi
+            printf '%s' "${GITHUB_WORKSPACE:-$PWD}" | sed -e 's|^/\([a-zA-Z]\)/|\1:\\|' -e 's|/|\\|g'
+          }
+          jsonrefl_abs_exe_win() {
+            local _rel _root
+            _rel="$(printf '%s' "$1" | tr '/' '\\')"
+            case "${_rel}" in
+              [\\/]*|[A-Za-z]:\\*) printf '%s\n' "${_rel}"; return ;;
+            esac
+            _root="$(jsonrefl_win_root | tr '/' '\\')"
+            _root="${_root%\\}"
+            printf '%s\n' "${_root}\\${_rel}"
+          }
+          jsonrefl_run_tests_validation_win() {
+            if command -v cygpath >/dev/null 2>&1; then
+              export JSONREFL_VALIDATION_SOURCE_DIR="$(cygpath -aw "${GITHUB_WORKSPACE}/validation")"
+            fi
+            _t_jsonrefl="$(jsonrefl_abs_exe_win "$(first_exe tests/build jsonrefl-test)")"
+            _v_jsonrefl="$(jsonrefl_abs_exe_win "$(first_exe validation/build jsonrefl-validation)")"
+            cmd.exe //c "${_t_jsonrefl}"
+            cmd.exe //c "${_v_jsonrefl}"
+          }
+          if [ "${{ matrix.msvc }}" = "true" ]; then
+            cmake -S tests -B tests/build -G "${{ matrix.generator }}" -A x64 ${STD} ${SAN}
+            cmake --build tests/build --config Release --parallel
+            cmake -S validation -B validation/build -G "${{ matrix.generator }}" -A x64 ${STD} ${SAN}
+            cmake --build validation/build --config Release --parallel
+            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" -A x64 ${STD} ${SAN}
+            cmake --build benchmark/build --config Release --parallel
+            jsonrefl_run_tests_validation_win
+          else
+            EXTRA=""
+            if [ -n "${{ matrix.c_compiler }}" ]; then
+              EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
+            fi
+            BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+            cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
+            cmake --build tests/build --parallel
+            cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
+            cmake --build validation/build --parallel
+            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
+            cmake --build benchmark/build --parallel
+            if [ "${{ runner.os }}" = "Windows" ]; then
+              jsonrefl_run_tests_validation_win
+            else
+              ./tests/build/jsonrefl-test
+              ./validation/build/jsonrefl-validation
+            fi
+          fi
+
+  # C++14 with strtod/strtoll fallback: Boost headers from the pinned tarball (no b2, no Charconv, no distro Boost).
+  cpp14:
+    name: ${{ matrix.name }} · C++14 (no Boost.Charconv)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-gcc
+            os: ubuntu-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: gcc
+            cxx_compiler: g++
+
+          - name: ubuntu-clang
+            os: ubuntu-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: clang
+            cxx_compiler: clang++
+
+          - name: windows-msvc
+            os: windows-latest
+            generator: Visual Studio 17 2022
+            msvc: true
+
+          - name: windows-clang-cl
+            os: windows-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: clang-cl
+            cxx_compiler: clang-cl
+
+          - name: windows-mingw
+            os: windows-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: gcc
+            cxx_compiler: g++
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Ninja (Windows)
+        if: runner.os == 'Windows' && matrix.generator == 'Ninja'
+        run: choco install ninja -y
+
+      - name: MSVC environment (clang-cl)
+        if: matrix.name == 'windows-clang-cl'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: MSVC environment (ASan runtime PATH for tests)
+        if: matrix.name == 'windows-msvc'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: MinGW-w64 (niXman binaries)
+        if: matrix.name == 'windows-mingw'
+        shell: pwsh
+        env:
+          MINGW_URL: https://github.com/niXman/mingw-builds-binaries/releases/download/15.2.0-rt_v13-rev1/x86_64-15.2.0-release-win32-seh-ucrt-rt_v13-rev1.7z
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "mingw-win64.7z"
+          Invoke-WebRequest -Uri $env:MINGW_URL -OutFile $archive -UseBasicParsing
+          $sevenZip = Join-Path ${env:ProgramFiles} "7-Zip\7z.exe"
+          if (-not (Test-Path $sevenZip)) {
+            $sevenZip = "7z"
+          }
+          $unpackRoot = Join-Path $env:RUNNER_TEMP "mingw-unpack"
+          New-Item -ItemType Directory -Force -Path $unpackRoot | Out-Null
+          & $sevenZip x $archive "-o$unpackRoot" -y
+          $gcc = Get-ChildItem -Path $unpackRoot -Recurse -Filter gcc.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $gcc) { throw "gcc.exe not found under $unpackRoot after extracting MinGW" }
+          Add-Content -Path $env:GITHUB_PATH -Value $gcc.DirectoryName
+
+      - name: Restore Boost headers (cpp14)
+        id: boost-headers-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
+          key: boost-${{ env.BOOST_CI_FOLDER }}-headers-only-v1
+
+      - name: Fetch Boost sources (headers only)
+        if: steps.boost-headers-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          mkdir -p "${{ github.workspace }}/opt"
+          cd "${{ github.workspace }}/opt"
+          ver="${{ env.BOOST_CI_VERSION }}"
+          ver_us="${ver//./_}"
+          archive="boost_${ver_us}.tar.bz2"
+          curl -fsSL "https://archives.boost.io/release/${ver}/source/${archive}" -o "${archive}"
+          tar -xjf "${archive}"
+
+      - name: Configure, build, tests + validation + benchmark
+        env:
+          BOOST_ROOT: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
+        run: |
+          set -euxo pipefail
+          STD="-DJSONREFL_CXX_STANDARD=14 -DJSONREFL_USE_BOOST_CHARCONV=OFF"
+          BOOST_INC="-DJSONREFL_BOOST_INCLUDE_DIR=${BOOST_ROOT}"
+          SAN="-DENABLE_ASAN=ON -DENABLE_UBSAN=ON"
+          if [ "${{ matrix.name }}" = "windows-mingw" ]; then
+            SAN=""
+          fi
+          first_exe() {
+            local d="$1" base="$2" c
+            for c in "${d}/Release/${base}.exe" "${d}/Debug/${base}.exe" "${d}/${base}.exe" "${d}/${base}"; do
+              if [ -f "${c}" ]; then
+                printf '%s\n' "${c}"
+                return 0
+              fi
+            done
+            printf '%s\n' "missing ${base} under ${d}:" >&2
+            ls -la "${d}" >&2 || true
+            exit 127
+          }
+          jsonrefl_win_root() {
+            if command -v cygpath >/dev/null 2>&1; then
+              cygpath -aw "$PWD"
+              return
+            fi
+            local _w
+            _w="$(pwd -W 2>/dev/null)" || true
+            if [ -n "${_w}" ]; then
+              printf '%s' "${_w}"
+              return
+            fi
+            printf '%s' "${GITHUB_WORKSPACE:-$PWD}" | sed -e 's|^/\([a-zA-Z]\)/|\1:\\|' -e 's|/|\\|g'
+          }
+          jsonrefl_abs_exe_win() {
+            local _rel _root
+            _rel="$(printf '%s' "$1" | tr '/' '\\')"
+            case "${_rel}" in
+              [\\/]*|[A-Za-z]:\\*) printf '%s\n' "${_rel}"; return ;;
+            esac
+            _root="$(jsonrefl_win_root | tr '/' '\\')"
+            _root="${_root%\\}"
+            printf '%s\n' "${_root}\\${_rel}"
+          }
+          jsonrefl_run_tests_validation_win() {
+            if command -v cygpath >/dev/null 2>&1; then
+              export JSONREFL_VALIDATION_SOURCE_DIR="$(cygpath -aw "${GITHUB_WORKSPACE}/validation")"
+            fi
+            _t_jsonrefl="$(jsonrefl_abs_exe_win "$(first_exe tests/build jsonrefl-test)")"
+            _v_jsonrefl="$(jsonrefl_abs_exe_win "$(first_exe validation/build jsonrefl-validation)")"
+            cmd.exe //c "${_t_jsonrefl}"
+            cmd.exe //c "${_v_jsonrefl}"
+          }
+          if [ "${{ matrix.msvc }}" = "true" ]; then
+            cmake -S tests -B tests/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST_INC} ${SAN}
+            cmake --build tests/build --config Release --parallel
+            cmake -S validation -B validation/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST_INC} ${SAN}
+            cmake --build validation/build --config Release --parallel
+            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST_INC} ${SAN}
+            cmake --build benchmark/build --config Release --parallel
+            jsonrefl_run_tests_validation_win
+          else
+            EXTRA=""
+            if [ -n "${{ matrix.c_compiler }}" ]; then
+              EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
+            fi
+            BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+            cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
+            cmake --build tests/build --parallel
+            cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
+            cmake --build validation/build --parallel
+            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
+            cmake --build benchmark/build --parallel
+            if [ "${{ runner.os }}" = "Windows" ]; then
+              jsonrefl_run_tests_validation_win
+            else
+              ./tests/build/jsonrefl-test
+              ./validation/build/jsonrefl-validation
+            fi
+          fi
+
+  # C++14 + Boost.Charconv (toolchain-specific Boost build; cache split: linux / MSVC / clang-cl / MinGW).
+  cpp14-boost:
+    name: ${{ matrix.name }} · C++14 + Boost ${{ matrix.boost_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-gcc
+            boost_version: '1.85.0'
+            boost_cache_key: linux
+            os: ubuntu-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: gcc
+            cxx_compiler: g++
+
+          - name: ubuntu-clang
+            boost_version: '1.85.0'
+            boost_cache_key: linux
+            os: ubuntu-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: clang
+            cxx_compiler: clang++
+
+          - name: windows-msvc
+            boost_version: '1.85.0'
+            boost_cache_key: msvc
+            os: windows-latest
+            generator: Visual Studio 17 2022
+            msvc: true
+
+          - name: windows-clang-cl
+            boost_version: '1.85.0'
+            boost_cache_key: clang-cl
+            os: windows-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: clang-cl
+            cxx_compiler: clang-cl
+
+          - name: windows-mingw
+            boost_version: '1.85.0'
+            boost_cache_key: mingw
+            os: windows-latest
+            generator: Ninja
+            build_type: Release
+            msvc: false
+            c_compiler: gcc
+            cxx_compiler: g++
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Ninja (Windows)
+        if: runner.os == 'Windows' && matrix.generator == 'Ninja'
+        run: choco install ninja -y
+
+      - name: MSVC environment (clang-cl + Boost)
+        if: matrix.name == 'windows-clang-cl'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: MSVC environment (Boost + jsonrefl)
+        if: matrix.msvc
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: MinGW-w64 (niXman binaries)
+        if: matrix.name == 'windows-mingw'
+        shell: pwsh
+        env:
+          MINGW_URL: https://github.com/niXman/mingw-builds-binaries/releases/download/15.2.0-rt_v13-rev1/x86_64-15.2.0-release-win32-seh-ucrt-rt_v13-rev1.7z
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "mingw-win64.7z"
+          Invoke-WebRequest -Uri $env:MINGW_URL -OutFile $archive -UseBasicParsing
+          $sevenZip = Join-Path ${env:ProgramFiles} "7-Zip\7z.exe"
+          if (-not (Test-Path $sevenZip)) {
+            $sevenZip = "7z"
+          }
+          $unpackRoot = Join-Path $env:RUNNER_TEMP "mingw-unpack"
+          New-Item -ItemType Directory -Force -Path $unpackRoot | Out-Null
+          & $sevenZip x $archive "-o$unpackRoot" -y
+          $gcc = Get-ChildItem -Path $unpackRoot -Recurse -Filter gcc.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $gcc) { throw "gcc.exe not found under $unpackRoot after extracting MinGW" }
+          Add-Content -Path $env:GITHUB_PATH -Value $gcc.DirectoryName
+
+      - name: Restore Boost (headers + Charconv)
+        id: boost-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v3
+
+      - name: Fetch and build Boost Charconv
+        if: steps.boost-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          mkdir -p "${{ github.workspace }}/opt"
+          cd "${{ github.workspace }}/opt"
+          ver="${{ matrix.boost_version }}"
+          ver_us="${ver//./_}"
+          archive="boost_${ver_us}.tar.bz2"
+          curl -fsSL "https://archives.boost.io/release/${ver}/source/${archive}" -o "${archive}"
+          tar -xjf "${archive}"
+          cd "${{ env.BOOST_CI_FOLDER }}"
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            ./bootstrap.sh
+            ./b2 -j"$(nproc)" --with-charconv link=static threading=multi variant=release stage
+          elif [ "${{ matrix.msvc }}" = "true" ]; then
+            cmd.exe //c bootstrap.bat
+            j="${NUMBER_OF_PROCESSORS:-8}"
+            if [ -f ./b2.exe ]; then B2="./b2.exe"; else B2="./b2"; fi
+            "${B2}" -j"${j}" toolset=msvc address-model=64 \
+              --with-charconv link=static threading=multi variant=release stage
+          elif [ "${{ matrix.name }}" = "windows-clang-cl" ]; then
+            cmd.exe //c bootstrap.bat
+            j="${NUMBER_OF_PROCESSORS:-8}"
+            if [ -f ./b2.exe ]; then B2="./b2.exe"; else B2="./b2"; fi
+            "${B2}" -j"${j}" toolset=clang-win address-model=64 \
+              --with-charconv link=static threading=multi variant=release stage
+          else
+            gcc --version
+            ./bootstrap.sh
+            j="${NUMBER_OF_PROCESSORS:-8}"
+            if [ -f ./b2.exe ]; then B2="./b2.exe"; else B2="./b2"; fi
+            "${B2}" -j"${j}" toolset=gcc address-model=64 \
+              --with-charconv link=static threading=multi variant=release stage
+          fi
+
+      - name: Configure, build, tests + validation + benchmark
+        env:
+          BOOST_ROOT: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
+        run: |
+          set -euxo pipefail
+          STD="-DJSONREFL_CXX_STANDARD=14 -DJSONREFL_USE_BOOST_CHARCONV=ON"
+          BOOST="-DJSONREFL_BOOST_INCLUDE_DIR=${BOOST_ROOT} -DJSONREFL_BOOST_LIBRARY_DIR=${BOOST_ROOT}/stage/lib"
+          SAN="-DENABLE_ASAN=ON -DENABLE_UBSAN=ON"
+          if [ "${{ matrix.msvc }}" = "true" ] || [ "${{ matrix.name }}" = "windows-mingw" ] || [ "${{ matrix.name }}" = "windows-clang-cl" ]; then
+            SAN=""
+          fi
+          first_exe() {
+            local d="$1" base="$2" c
+            for c in "${d}/Release/${base}.exe" "${d}/Debug/${base}.exe" "${d}/${base}.exe" "${d}/${base}"; do
+              if [ -f "${c}" ]; then
+                printf '%s\n' "${c}"
+                return 0
+              fi
+            done
+            printf '%s\n' "missing ${base} under ${d}:" >&2
+            ls -la "${d}" >&2 || true
+            exit 127
+          }
+          jsonrefl_win_root() {
+            if command -v cygpath >/dev/null 2>&1; then
+              cygpath -aw "$PWD"
+              return
+            fi
+            local _w
+            _w="$(pwd -W 2>/dev/null)" || true
+            if [ -n "${_w}" ]; then
+              printf '%s' "${_w}"
+              return
+            fi
+            printf '%s' "${GITHUB_WORKSPACE:-$PWD}" | sed -e 's|^/\([a-zA-Z]\)/|\1:\\|' -e 's|/|\\|g'
+          }
+          jsonrefl_abs_exe_win() {
+            local _rel _root
+            _rel="$(printf '%s' "$1" | tr '/' '\\')"
+            case "${_rel}" in
+              [\\/]*|[A-Za-z]:\\*) printf '%s\n' "${_rel}"; return ;;
+            esac
+            _root="$(jsonrefl_win_root | tr '/' '\\')"
+            _root="${_root%\\}"
+            printf '%s\n' "${_root}\\${_rel}"
+          }
+          jsonrefl_run_tests_validation_win() {
+            if command -v cygpath >/dev/null 2>&1; then
+              export JSONREFL_VALIDATION_SOURCE_DIR="$(cygpath -aw "${GITHUB_WORKSPACE}/validation")"
+            fi
+            _t_jsonrefl="$(jsonrefl_abs_exe_win "$(first_exe tests/build jsonrefl-test)")"
+            _v_jsonrefl="$(jsonrefl_abs_exe_win "$(first_exe validation/build jsonrefl-validation)")"
+            cmd.exe //c "${_t_jsonrefl}"
+            cmd.exe //c "${_v_jsonrefl}"
+          }
+          if [ "${{ matrix.msvc }}" = "true" ]; then
+            cmake -S tests -B tests/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST} ${SAN}
+            cmake --build tests/build --config Release --parallel
+            cmake -S validation -B validation/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST} ${SAN}
+            cmake --build validation/build --config Release --parallel
+            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST} ${SAN}
+            cmake --build benchmark/build --config Release --parallel
+            jsonrefl_run_tests_validation_win
+          else
+            EXTRA=""
+            if [ -n "${{ matrix.c_compiler }}" ]; then
+              EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
+            fi
+            BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+            cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
+            cmake --build tests/build --parallel
+            cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
+            cmake --build validation/build --parallel
+            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
+            cmake --build benchmark/build --parallel
+            if [ "${{ runner.os }}" = "Windows" ]; then
+              jsonrefl_run_tests_validation_win
+            else
+              ./tests/build/jsonrefl-test
+              ./validation/build/jsonrefl-validation
+            fi
+          fi
