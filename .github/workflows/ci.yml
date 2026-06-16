@@ -5,9 +5,10 @@ on:
   pull_request:
 
 env:
-  # C++14: same Boost tree as CI (headers only via extract, or Charconv via b2 in cpp14-boost).
   BOOST_CI_VERSION: 1.85.0
   BOOST_CI_FOLDER: boost_1_85_0
+  BOOST_B2_VERSION: 5.4.2
+  BOOST_CHARCONV_CACHE_KEY: v1
 
 jobs:
   # Full compiler matrix: std::charconv only, no Boost.
@@ -281,7 +282,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-headers-only-v1
+          key: boost-headers-${{ env.BOOST_CI_FOLDER }}-v1
 
       - name: Fetch Boost sources (headers only)
         if: steps.boost-headers-cache.outputs.cache-hit != 'true'
@@ -368,7 +369,7 @@ jobs:
             ./validation/build/jsonrefl-validation
           fi
 
-  # C++14 + Boost.Charconv (toolchain-specific Boost build; cache split: linux / MSVC / clang-cl / MinGW).
+  # C++14 + Boost.Charconv (per-toolchain b2 build; cache key includes boost_cache_key).
   cpp14-boost:
     name: ${{ matrix.name }} · C++14 + Boost ${{ matrix.boost_version }}
     strategy:
@@ -444,14 +445,8 @@ jobs:
         if: runner.os == 'Windows' && matrix.generator == 'Ninja'
         run: choco install ninja -y
 
-      - name: MSVC environment (clang-cl + Boost)
-        if: matrix.name == 'windows-clang-cl'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: MSVC environment (Boost + jsonrefl)
-        if: matrix.msvc
+      - name: MSVC environment
+        if: matrix.msvc || matrix.name == 'windows-clang-cl'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -482,88 +477,68 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-            ${{ github.workspace }}/opt/b2-5.4.2
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v9
+            ${{ github.workspace }}/opt/b2-${{ env.BOOST_B2_VERSION }}
+          key: boost-charconv-${{ env.BOOST_CI_FOLDER }}-${{ matrix.boost_cache_key }}-${{ env.BOOST_CHARCONV_CACHE_KEY }}
 
       - name: Verify Boost Charconv artifacts
         id: boost-charconv
         run: |
           set -euo pipefail
-          jsonrefl_have_boost_charconv() {
-            local d="${1//\\//}"
-            [ -d "${d}" ] && find "${d}" -maxdepth 1 -name '*boost_charconv*' -print -quit | grep -q .
-          }
           libdir="${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}/stage/lib"
-          if jsonrefl_have_boost_charconv "${libdir}"; then
+          libdir="${libdir//\\//}"
+          if [ -d "${libdir}" ] && find "${libdir}" -maxdepth 1 -name '*boost_charconv*' -print -quit 2>/dev/null | grep -q .; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Boost.Charconv library missing under ${libdir} (stale or incomplete cache)" >&2
-            ls -la "${libdir}" 2>&1 || true
           fi
 
       - name: Fetch and build Boost Charconv
         if: steps.boost-charconv.outputs.ready != 'true'
+        env:
+          OPT: ${{ github.workspace }}/opt
+          B2_ROOT: ${{ github.workspace }}/opt/b2-${{ env.BOOST_B2_VERSION }}
         run: |
           set -euxo pipefail
-          mkdir -p "${{ github.workspace }}/opt"
-          cd "${{ github.workspace }}/opt"
           ver="${{ matrix.boost_version }}"
           ver_us="${ver//./_}"
-          archive="boost_${ver_us}.tar.bz2"
           folder="${{ env.BOOST_CI_FOLDER }}"
+          libdir="${OPT}/${folder}/stage/lib"
+          mkdir -p "${OPT}"
+          cd "${OPT}"
           if [ ! -d "${folder}" ]; then
+            archive="boost_${ver_us}.tar.bz2"
             curl -fsSL "https://archives.boost.io/release/${ver}/source/${archive}" -o "${archive}"
             tar -xjf "${archive}"
           fi
           cd "${folder}"
+          b2_common=(--with-charconv link=static threading=multi variant=release stage)
           if [ "${{ runner.os }}" = "Linux" ]; then
             ./bootstrap.sh
-            ./b2 -j"$(nproc)" --with-charconv link=static threading=multi variant=release stage
+            ./b2 -j"$(nproc)" "${b2_common[@]}"
           elif [ "${{ matrix.msvc }}" = "true" ]; then
-            # Boost 1.85 b2 + msvc.jam are too old for MSVC 14.40+ / VS 2026; use b2 5.4.2 engine/rules.
             cmd.exe //c bootstrap.bat vc143
-            opt_dir="${{ github.workspace }}/opt"
-            b2_dir="${opt_dir}/b2-5.4.2"
-            if [ ! -f "${b2_dir}/b2.exe" ]; then
-              curl -fsSL -o "${opt_dir}/b2-5.4.2.zip" \
-                "https://github.com/bfgroup/b2/releases/download/5.4.2/b2-5.4.2.zip"
-              unzip -q -o "${opt_dir}/b2-5.4.2.zip" -d "${opt_dir}"
-              ( cd "${b2_dir}" && cmd.exe //c bootstrap.bat )
+            if [ ! -f "${B2_ROOT}/b2.exe" ]; then
+              curl -fsSL -o "${OPT}/b2-${{ env.BOOST_B2_VERSION }}.zip" \
+                "https://github.com/bfgroup/b2/releases/download/${{ env.BOOST_B2_VERSION }}/b2-${{ env.BOOST_B2_VERSION }}.zip"
+              unzip -q -o "${OPT}/b2-${{ env.BOOST_B2_VERSION }}.zip" -d "${OPT}"
+              ( cd "${B2_ROOT}" && cmd.exe //c bootstrap.bat )
             fi
-            if [ ! -f "${b2_dir}/b2.exe" ]; then
-              echo "Failed to build standalone b2 under ${b2_dir}" >&2
-              exit 1
-            fi
-            export BOOST_BUILD_PATH="${b2_dir}/src"
-            j="${NUMBER_OF_PROCESSORS:-8}"
+            [ -f "${B2_ROOT}/b2.exe" ] || { echo "b2 bootstrap failed under ${B2_ROOT}" >&2; exit 1; }
+            export BOOST_BUILD_PATH="${B2_ROOT}/src"
             rm -rf stage/lib
-            "${b2_dir}/b2.exe" -j"${j}" toolset=msvc-14.3 address-model=64 \
-              --with-charconv link=static threading=multi variant=release stage
+            "${B2_ROOT}/b2.exe" -j"${NUMBER_OF_PROCESSORS:-8}" toolset=msvc-14.3 address-model=64 \
+              "${b2_common[@]}"
           elif [ "${{ matrix.name }}" = "windows-clang-cl" ]; then
             cmd.exe //c bootstrap.bat clang-win
-            j="${NUMBER_OF_PROCESSORS:-8}"
-            if [ -f ./b2.exe ]; then B2="./b2.exe"; else B2="./b2"; fi
-            "${B2}" -j"${j}" toolset=clang-win address-model=64 \
-              --with-charconv link=static threading=multi variant=release stage
+            B2="$( [ -f ./b2.exe ] && echo ./b2.exe || echo ./b2 )"
+            "${B2}" -j"${NUMBER_OF_PROCESSORS:-8}" toolset=clang-win address-model=64 "${b2_common[@]}"
           else
-            gcc --version
             ./bootstrap.sh
-            j="${NUMBER_OF_PROCESSORS:-8}"
-            if [ -f ./b2.exe ]; then B2="./b2.exe"; else B2="./b2"; fi
-            "${B2}" -j"${j}" toolset=gcc address-model=64 \
-              --with-charconv link=static threading=multi variant=release stage
+            B2="$( [ -f ./b2.exe ] && echo ./b2.exe || echo ./b2 )"
+            "${B2}" -j"${NUMBER_OF_PROCESSORS:-8}" toolset=gcc address-model=64 "${b2_common[@]}"
           fi
-          libdir="${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}/stage/lib"
-          jsonrefl_have_boost_charconv() {
-            local d="${1//\\//}"
-            [ -d "${d}" ] && find "${d}" -maxdepth 1 -name '*boost_charconv*' -print -quit | grep -q .
-          }
-          if ! jsonrefl_have_boost_charconv "${libdir}"; then
-            echo "b2 did not produce Boost.Charconv under ${libdir}" >&2
-            ls -la "${libdir}" 2>&1 || true
-            exit 1
-          fi
+          find "${libdir//\\//}" -maxdepth 1 -name '*boost_charconv*' -print -quit 2>/dev/null | grep -q . \
+            || { echo "Boost.Charconv missing under ${libdir}" >&2; ls -la "${libdir}" 2>&1 || true; exit 1; }
 
       - name: Save Boost (headers + Charconv)
         if: steps.boost-charconv.outputs.ready != 'true' && success()
@@ -571,8 +546,8 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-            ${{ github.workspace }}/opt/b2-5.4.2
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v9
+            ${{ github.workspace }}/opt/b2-${{ env.BOOST_B2_VERSION }}
+          key: boost-charconv-${{ env.BOOST_CI_FOLDER }}-${{ matrix.boost_cache_key }}-${{ env.BOOST_CHARCONV_CACHE_KEY }}
 
       - name: Configure, build, tests + validation + benchmark
         env:
