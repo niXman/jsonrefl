@@ -35,8 +35,11 @@ jobs:
 
           - name: windows-msvc
             os: windows-latest
-            generator: Visual Studio 17 2022
+            generator: Ninja
+            build_type: Release
             msvc: true
+            c_compiler: cl
+            cxx_compiler: cl
 
           - name: windows-clang-cl
             os: windows-latest
@@ -157,32 +160,22 @@ jobs:
             cmd.exe //c "${_t_jsonrefl}"
             cmd.exe //c "${_v_jsonrefl}"
           }
-          if [ "${{ matrix.msvc }}" = "true" ]; then
-            cmake -S tests -B tests/build -G "${{ matrix.generator }}" -A x64 ${STD} ${SAN}
-            cmake --build tests/build --config Release --parallel
-            cmake -S validation -B validation/build -G "${{ matrix.generator }}" -A x64 ${STD} ${SAN}
-            cmake --build validation/build --config Release --parallel
-            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" -A x64 ${STD} ${SAN}
-            cmake --build benchmark/build --config Release --parallel
+          EXTRA=""
+          if [ -n "${{ matrix.c_compiler }}" ]; then
+            EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
+          fi
+          BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
+          cmake --build tests/build --parallel
+          cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
+          cmake --build validation/build --parallel
+          cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
+          cmake --build benchmark/build --parallel
+          if [ "${{ runner.os }}" = "Windows" ]; then
             jsonrefl_run_tests_validation_win
           else
-            EXTRA=""
-            if [ -n "${{ matrix.c_compiler }}" ]; then
-              EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
-            fi
-            BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
-            cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
-            cmake --build tests/build --parallel
-            cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
-            cmake --build validation/build --parallel
-            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${SAN}
-            cmake --build benchmark/build --parallel
-            if [ "${{ runner.os }}" = "Windows" ]; then
-              jsonrefl_run_tests_validation_win
-            else
-              ./tests/build/jsonrefl-test
-              ./validation/build/jsonrefl-validation
-            fi
+            ./tests/build/jsonrefl-test
+            ./validation/build/jsonrefl-validation
           fi
 
   # C++14 with strtod/strtoll fallback: Boost headers from the pinned tarball (no b2, no Charconv, no distro Boost).
@@ -210,8 +203,11 @@ jobs:
 
           - name: windows-msvc
             os: windows-latest
-            generator: Visual Studio 17 2022
+            generator: Ninja
+            build_type: Release
             msvc: true
+            c_compiler: cl
+            cxx_compiler: cl
 
           - name: windows-clang-cl
             os: windows-latest
@@ -354,32 +350,22 @@ jobs:
             cmd.exe //c "${_t_jsonrefl}"
             cmd.exe //c "${_v_jsonrefl}"
           }
-          if [ "${{ matrix.msvc }}" = "true" ]; then
-            cmake -S tests -B tests/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST_INC} ${SAN}
-            cmake --build tests/build --config Release --parallel
-            cmake -S validation -B validation/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST_INC} ${SAN}
-            cmake --build validation/build --config Release --parallel
-            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST_INC} ${SAN}
-            cmake --build benchmark/build --config Release --parallel
+          EXTRA=""
+          if [ -n "${{ matrix.c_compiler }}" ]; then
+            EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
+          fi
+          BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
+          cmake --build tests/build --parallel
+          cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
+          cmake --build validation/build --parallel
+          cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
+          cmake --build benchmark/build --parallel
+          if [ "${{ runner.os }}" = "Windows" ]; then
             jsonrefl_run_tests_validation_win
           else
-            EXTRA=""
-            if [ -n "${{ matrix.c_compiler }}" ]; then
-              EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
-            fi
-            BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
-            cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
-            cmake --build tests/build --parallel
-            cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
-            cmake --build validation/build --parallel
-            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST_INC} ${SAN}
-            cmake --build benchmark/build --parallel
-            if [ "${{ runner.os }}" = "Windows" ]; then
-              jsonrefl_run_tests_validation_win
-            else
-              ./tests/build/jsonrefl-test
-              ./validation/build/jsonrefl-validation
-            fi
+            ./tests/build/jsonrefl-test
+            ./validation/build/jsonrefl-validation
           fi
 
   # C++14 + Boost.Charconv (toolchain-specific Boost build; cache split: linux / MSVC / clang-cl / MinGW).
@@ -413,8 +399,11 @@ jobs:
             boost_version: '1.85.0'
             boost_cache_key: msvc
             os: windows-latest
-            generator: Visual Studio 17 2022
+            generator: Ninja
+            build_type: Release
             msvc: true
+            c_compiler: cl
+            cxx_compiler: cl
 
           - name: windows-clang-cl
             boost_version: '1.85.0'
@@ -585,30 +574,20 @@ jobs:
             cmd.exe //c "${_t_jsonrefl}"
             cmd.exe //c "${_v_jsonrefl}"
           }
-          if [ "${{ matrix.msvc }}" = "true" ]; then
-            cmake -S tests -B tests/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST} ${SAN}
-            cmake --build tests/build --config Release --parallel
-            cmake -S validation -B validation/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST} ${SAN}
-            cmake --build validation/build --config Release --parallel
-            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" -A x64 ${STD} ${BOOST} ${SAN}
-            cmake --build benchmark/build --config Release --parallel
+          EXTRA=""
+          if [ -n "${{ matrix.c_compiler }}" ]; then
+            EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
+          fi
+          BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
+          cmake --build tests/build --parallel
+          cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
+          cmake --build validation/build --parallel
+          cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
+          cmake --build benchmark/build --parallel
+          if [ "${{ runner.os }}" = "Windows" ]; then
             jsonrefl_run_tests_validation_win
           else
-            EXTRA=""
-            if [ -n "${{ matrix.c_compiler }}" ]; then
-              EXTRA="-DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}"
-            fi
-            BT="-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}"
-            cmake -S tests -B tests/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
-            cmake --build tests/build --parallel
-            cmake -S validation -B validation/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
-            cmake --build validation/build --parallel
-            cmake -S benchmark -B benchmark/build -G "${{ matrix.generator }}" ${BT} ${EXTRA} ${STD} ${BOOST} ${SAN}
-            cmake --build benchmark/build --parallel
-            if [ "${{ runner.os }}" = "Windows" ]; then
-              jsonrefl_run_tests_validation_win
-            else
-              ./tests/build/jsonrefl-test
-              ./validation/build/jsonrefl-validation
-            fi
+            ./tests/build/jsonrefl-test
+            ./validation/build/jsonrefl-validation
           fi
