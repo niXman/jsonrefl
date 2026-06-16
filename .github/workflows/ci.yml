@@ -487,8 +487,12 @@ jobs:
         id: boost-charconv
         run: |
           set -euo pipefail
+          jsonrefl_have_boost_charconv() {
+            local d="${1//\\//}"
+            [ -d "${d}" ] && find "${d}" -maxdepth 1 -name '*boost_charconv*' -print -quit | grep -q .
+          }
           libdir="${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}/stage/lib"
-          if compgen -G "${libdir}/*boost_charconv*" > /dev/null 2>&1; then
+          if jsonrefl_have_boost_charconv "${libdir}"; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -536,7 +540,11 @@ jobs:
               --with-charconv link=static threading=multi variant=release stage
           fi
           libdir="${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}/stage/lib"
-          if ! compgen -G "${libdir}/*boost_charconv*" > /dev/null 2>&1; then
+          jsonrefl_have_boost_charconv() {
+            local d="${1//\\//}"
+            [ -d "${d}" ] && find "${d}" -maxdepth 1 -name '*boost_charconv*' -print -quit | grep -q .
+          }
+          if ! jsonrefl_have_boost_charconv "${libdir}"; then
             echo "b2 did not produce Boost.Charconv under ${libdir}" >&2
             ls -la "${libdir}" 2>&1 || true
             exit 1
