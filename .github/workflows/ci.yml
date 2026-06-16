@@ -480,8 +480,10 @@ jobs:
         id: boost-cache-restore
         uses: actions/cache/restore@v4
         with:
-          path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v8
+          path: |
+            ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
+            ${{ github.workspace }}/opt/b2-5.4.2
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v9
 
       - name: Verify Boost Charconv artifacts
         id: boost-charconv
@@ -519,14 +521,24 @@ jobs:
             ./bootstrap.sh
             ./b2 -j"$(nproc)" --with-charconv link=static threading=multi variant=release stage
           elif [ "${{ matrix.msvc }}" = "true" ]; then
-            # Boost 1.85 b2 skips library builds on MSVC 14.40+; replace msvc.jam with b2 5.4.2 rules.
+            # Boost 1.85 b2 + msvc.jam are too old for MSVC 14.40+ / VS 2026; use b2 5.4.2 engine/rules.
             cmd.exe //c bootstrap.bat vc143
-            curl -fsSL -o tools/build/src/tools/msvc.jam \
-              "https://raw.githubusercontent.com/bfgroup/b2/5.4.2/src/tools/msvc.jam"
+            opt_dir="${{ github.workspace }}/opt"
+            b2_dir="${opt_dir}/b2-5.4.2"
+            if [ ! -f "${b2_dir}/b2.exe" ]; then
+              curl -fsSL -o "${opt_dir}/b2-5.4.2.zip" \
+                "https://github.com/bfgroup/b2/releases/download/5.4.2/b2-5.4.2.zip"
+              unzip -q -o "${opt_dir}/b2-5.4.2.zip" -d "${opt_dir}"
+              ( cd "${b2_dir}" && cmd.exe //c bootstrap.bat )
+            fi
+            if [ ! -f "${b2_dir}/b2.exe" ]; then
+              echo "Failed to build standalone b2 under ${b2_dir}" >&2
+              exit 1
+            fi
+            export BOOST_BUILD_PATH="${b2_dir}/src"
             j="${NUMBER_OF_PROCESSORS:-8}"
-            B2="./b2.exe"
             rm -rf stage/lib
-            "${B2}" -j"${j}" toolset=msvc-14.3 address-model=64 \
+            "${b2_dir}/b2.exe" -j"${j}" toolset=msvc-14.3 address-model=64 \
               --with-charconv link=static threading=multi variant=release stage
           elif [ "${{ matrix.name }}" = "windows-clang-cl" ]; then
             cmd.exe //c bootstrap.bat clang-win
@@ -557,8 +569,10 @@ jobs:
         if: steps.boost-charconv.outputs.ready != 'true' && success()
         uses: actions/cache/save@v4
         with:
-          path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v8
+          path: |
+            ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
+            ${{ github.workspace }}/opt/b2-5.4.2
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v9
 
       - name: Configure, build, tests + validation + benchmark
         env:
