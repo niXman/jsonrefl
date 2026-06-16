@@ -481,7 +481,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v7
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v8
 
       - name: Verify Boost Charconv artifacts
         id: boost-charconv
@@ -519,15 +519,12 @@ jobs:
             ./bootstrap.sh
             ./b2 -j"$(nproc)" --with-charconv link=static threading=multi variant=release stage
           elif [ "${{ matrix.msvc }}" = "true" ]; then
-            # Boost 1.85 ships an old b2 that skips library builds on MSVC 14.40+ (VS 17.10+ / 2026).
+            # Boost 1.85 b2 skips library builds on MSVC 14.40+; replace msvc.jam with b2 5.4.2 rules.
             cmd.exe //c bootstrap.bat vc143
-            curl -fsSL -o b2-standalone.tar.bz2 \
-              "https://github.com/bfgroup/b2/releases/download/5.4.2/b2-5.4.2.tar.bz2"
-            tar -xjf b2-standalone.tar.bz2
-            b2_dir="$(find . -maxdepth 1 -type d -name 'b2-*' | head -1)"
-            B2="./${b2_dir}/b2.exe"
-            export BOOST_BUILD_PATH="${PWD}/${b2_dir}/src"
+            curl -fsSL -o tools/build/src/tools/msvc.jam \
+              "https://raw.githubusercontent.com/bfgroup/b2/5.4.2/src/tools/msvc.jam"
             j="${NUMBER_OF_PROCESSORS:-8}"
+            B2="./b2.exe"
             rm -rf stage/lib
             "${B2}" -j"${j}" toolset=msvc-14.3 address-model=64 \
               --with-charconv link=static threading=multi variant=release stage
@@ -561,7 +558,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v7
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v8
 
       - name: Configure, build, tests + validation + benchmark
         env:
