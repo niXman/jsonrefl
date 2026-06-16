@@ -481,7 +481,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/opt/${{ env.BOOST_CI_FOLDER }}
-          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v${{ matrix.boost_cache_key == 'clang-cl' && '4' || '3' }}
+          key: boost-${{ env.BOOST_CI_FOLDER }}-charconv-${{ matrix.boost_cache_key }}-static-v${{ matrix.boost_cache_key == 'clang-cl' && '5' || '4' }}
 
       - name: Fetch and build Boost Charconv
         if: steps.boost-cache.outputs.cache-hit != 'true'
@@ -499,13 +499,14 @@ jobs:
             ./bootstrap.sh
             ./b2 -j"$(nproc)" --with-charconv link=static threading=multi variant=release stage
           elif [ "${{ matrix.msvc }}" = "true" ]; then
-            cmd.exe //c bootstrap.bat
+            # Boost 1.85 bootstrap auto-detects vcunk on VS 2025+; vc143 builds b2 reliably.
+            cmd.exe //c bootstrap.bat vc143
             j="${NUMBER_OF_PROCESSORS:-8}"
             if [ -f ./b2.exe ]; then B2="./b2.exe"; else B2="./b2"; fi
             "${B2}" -j"${j}" toolset=msvc address-model=64 \
               --with-charconv link=static threading=multi variant=release stage
           elif [ "${{ matrix.name }}" = "windows-clang-cl" ]; then
-            cmd.exe //c bootstrap.bat
+            cmd.exe //c bootstrap.bat clang-win
             j="${NUMBER_OF_PROCESSORS:-8}"
             if [ -f ./b2.exe ]; then B2="./b2.exe"; else B2="./b2"; fi
             "${B2}" -j"${j}" toolset=clang-win address-model=64 \
