@@ -8,10 +8,10 @@ No external dependencies. No external code generation. Just one header.
 ## Table of contents
 
 - [Features](#features)
-- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Supported Types](#supported-types)
-  - [Portable aliases (string_view_t, optional_t)](#portable-aliases-for-string-view-and-optional)
+  - [`jsonrefl::string_view_t` and `jsonrefl::optional_t<T>` (portable aliases)](#jsonreflstring_view_t-and-jsonrefloptionalt-portable-aliases)
+  - [`jsonrefl::value_t` (non-owning JSON leaf)](#jsonreflvalue_t-non-owning-json-leaf)
 - [Defining metadata](#defining-metadata)
   - [`JSONREFL_METADATA` — for an existing struct](#jsonrefl_metadata--for-an-existing-struct)
   - [`JSONREFL_STRUCT` — declare and register in one shot](#jsonrefl_struct--declare-and-register-in-one-shot)
@@ -38,6 +38,7 @@ No external dependencies. No external code generation. Just one header.
   - [Why two flavours](#why-two-flavours)
   - [Hard-mode construction](#hard-mode-construction)
   - [Inspection](#inspection)
+- [Installation](#installation)
 - [License](#license)
 
 ## Features
@@ -49,40 +50,15 @@ User-facing capabilities (implementation details live in [Internals](#internals-
   - `JSONREFL_METADATA(type, members...)` registers an existing struct;
   - `JSONREFL_STRUCT(type, (type, name)...)` declares a struct and registers it in one shot;
   - `JSONREFL_METADATA_DOC` / `JSONREFL_STRUCT_DOC` are the same two macros with an extra per-field doc string (see [Field doc comments](#field-doc-comments)).
-- **Rich type support** — nested structs, `std::vector`, `std::list`, `std::map`, `std::unordered_map`, `jsonrefl::optional_t`, `std::string`, `jsonrefl::string_view_t`, `bool`, integers, floats. See [Supported Types](#supported-types) and [portable aliases](#portable-aliases-for-string-view-and-optional).
+- **Rich type support** — `bool`, integers, floats, `std::string`, `jsonrefl::string_view_t` / `jsonrefl::optional_t<T>`, `jsonrefl::value_t`, nested structs, `std::vector`, `std::list`, `std::map`, `std::unordered_map`. See [Supported Types](#supported-types).
 - **Parsing functions** —
   - `parse()` parses any sequence of *const* chunks (or one whole document) and writes into the target object, without de-escaping;
-  - `parse_m()` parses any sequence of *mutable* chunks (or one whole document) and de-escapes inside the same memory and letting `jsonrefl::string_view_t` members be true zero-copy slices of fully-decoded text;
+  - `parse_m()` parses any sequence of *mutable* chunks (or one whole document) and de-escapes inside the same memory, letting `jsonrefl::string_view_t` and `jsonrefl::value_t` members be true zero-copy slices of fully-decoded text;
   - `parse_next()` / `parse_next_m()` are the sequential counterparts for multi-document streams (see [Sequential records](#sequential-records-parse_next--parse_next_m)).
 - **Three serialization paths** — `to_string()`, `required_bytes()` + `to_buffer()` (one allocation, exact size), and `to_chunked_buffer()` (fixed-size buffer + flush callback for sockets / constrained memory).
 - **Pretty-print & doc comments** — every serialization function takes a `serialize_flags` bitmask (`pretty`, `comments`).
 - **Compile-time introspection** — query struct name, member count, and member types by name.
 - **Compile-time member index** — name → setter resolution is constant-cost on the parser hot path, with a clash-detection guarantee that turns name collisions into build errors.
-
-## Installation
-
-Single header. Either copy it in:
-
-```bash
-cp jsonrefl/include/jsonrefl/jsonrefl.hpp /your/project/include/jsonrefl/
-```
-
-```cpp
-#include <jsonrefl/jsonrefl.hpp>
-```
-
-…or add the include path from CMake:
-
-```cmake
-cmake_minimum_required(VERSION 3.5)
-project(myapp LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-include_directories(path/to/jsonrefl/include)
-add_executable(myapp main.cpp)
-```
 
 ## Quick Start
 
@@ -112,27 +88,74 @@ int main() {
 
 ## Supported Types
 
-### Portable aliases for string view and optional
-
-Prefer **`jsonrefl::string_view_t`** and **`jsonrefl::optional_t<T>`** in reflected structs and in examples so the same client code builds in both language modes supported by this header:
-
-- **C++14** — aliases resolve to **`boost::string_view`** and **`boost::optional<T>`** (the header includes the corresponding Boost headers when `__cplusplus < 201703L`).
-- **C++17 and later** — aliases resolve to **`std::string_view`** and **`std::optional<T>`**.
-
 | C++ Type | JSON Representation |
 |---|---|
 | `bool` | `true` / `false` |
 | `int`, `int64_t`, `size_t`, … | number |
 | `double`, `float` | number |
-| `std::string` | string |
-| `jsonrefl::string_view_t` | string (zero-copy) |
-| `jsonrefl::optional_t<T>` | value or `null` |
+| `std::string` | string (owning) |
+| `jsonrefl::string_view_t` | string (non-owning; see [aliases](#jsonreflstring_view_t-and-jsonrefloptionalt-portable-aliases)) |
+| `jsonrefl::optional_t<T>` | value or `null` (see [aliases](#jsonreflstring_view_t-and-jsonrefloptionalt-portable-aliases)) |
+| `jsonrefl::value_t` | any JSON leaf (`null`, string, integer, floating, boolean; see [below](#jsonreflvalue_t-non-owning-json-leaf)) |
 | `std::vector<T>` | array |
 | `std::list<T>` | array |
 | `std::map<K, V>` | object |
 | `std::unordered_map<K, V>` | object |
 | struct with `JSONREFL_METADATA` | object |
 | nested combinations of the above | nested JSON |
+
+### `jsonrefl::string_view_t` and `jsonrefl::optional_t<T>` (portable aliases)
+
+Prefer **`jsonrefl::string_view_t`** and **`jsonrefl::optional_t<T>`** together in reflected structs and in examples so the same client code builds in both language modes supported by this header:
+
+- **C++14** — aliases resolve to **`boost::string_view`** and **`boost::optional<T>`** (the header includes the corresponding Boost headers when `__cplusplus < 201703L`).
+- **C++17 and later** — aliases resolve to **`std::string_view`** and **`std::optional<T>`**.
+
+`string_view_t` is **non-owning**: after `parse()` / `parse_m()` the slice points into your input buffer (or into the parser **`accum`** when escapes were decoded there). That backing storage must outlive the view — the same lifetime, chunked-feed, and `parse_next` rules documented under [Parsing](#parsing) apply.
+
+### `jsonrefl::value_t` (non-owning JSON leaf)
+
+`value_t` stores a **non-owning** slice of the input token plus a `value_kind` tag (`null`, `string`, `integer`, `floating`, `boolean`). On parse, numeric and boolean leaves are kept as **lexical text** — the library does not call `from_chars` / similar until you invoke `to_int32()`, `to_double()`, `to_bool()`, `to<T>()`, …
+
+The parser classifies numbers lexically: tokens containing `.`, `e`, or `E` (including `NaN` / `Infinity` when `flags::allow_infinity_and_nan` is set) become `value_kind::floating`; all other numeric tokens become `value_kind::integer`.
+
+That defers typed conversion to when (and whether) you need it, which speeds up parsing when many numeric fields are present but only some are consumed, and preserves the exact JSON spelling of numbers and booleans for round-trip serialization.
+
+Use `value_t` as a **leaf** type — struct field, container element, or map **value**. It is not a dynamic JSON document type; for heterogeneous objects use e.g. `std::map<std::string, jsonrefl::value_t>` or a struct with several `value_t` members.
+
+**Lifetime and feed constraints** are the same as for [`jsonrefl::string_view_t`](#jsonreflstring_view_t-and-jsonrefloptionalt-portable-aliases): the slice points into the input buffer, or into **`accum`** when `parse()` decoded escapes. That storage must outlive the `value_t`. Chunked `parse()` can return `state::sv_cross_chunk`; chunked `parse_m()` requires contracts **C1** + **C2**; copy or consume before the next `parse_next()` when slices may refer to `accum` or an earlier chunk.
+
+**Conversion:** `to_*()` / `to<T>()` return an empty `optional_t` on failure (overflow, trailing junk, or **wrong `value_kind`**). Each converter accepts only the matching kind:
+
+| `value_kind` | `to_*()` / `to<T>()` |
+|---|---|
+| `integer` | `to_int8()` … `to_uint64()`, integral / enum `to<T>()` |
+| `floating` | `to_float()`, `to_double()`, floating `to<T>()` |
+| `boolean` | `to_bool()`, `to<bool>()` |
+| `string` | `to_string()` |
+| `null` | all of the above fail (empty optional); default-constructed `value_t` |
+
+Calling `to_int32()` on a `floating` leaf (or `to_double()` on an `integer` leaf) returns an empty optional even if the lexeme would parse as a number.
+
+```cpp
+struct row {
+    jsonrefl::value_t id;    // number or string — decide later
+    jsonrefl::value_t extra; // arbitrary leaf, or null
+};
+JSONREFL_METADATA(row, id, extra);
+
+static constexpr char doc[] = R"({"id":42,"extra":null})";
+row r{};
+jsonrefl::make_parser(&r).parse(doc, sizeof(doc) - 1);
+
+if ( const auto n = r.id.to_int32() ) {
+    // use *n  (requires r.id.kind() == value_kind::integer)
+}
+// r.id.kind() == jsonrefl::value_kind::integer
+// r.extra.kind() == jsonrefl::value_kind::null
+```
+
+Serialization writes `null` / booleans / integer and floating lexemes from the stored slice and re-escapes string payloads like any other string field.
 
 ## Defining metadata
 
@@ -217,7 +240,7 @@ std::cout << jsonrefl::to_string(p, jsonrefl::serialize_flags::pretty) << '\n';
 | `unknown_key` | An object key has no corresponding struct field. Returned only when `flags::skip_unknown_keys` is **not** set; enable that flag to skip such keys and continue instead. |
 | `record_end` | A complete document was parsed and more non-whitespace bytes follow it. `cursor::remaining()` reports how many input bytes are left, starting at the next document. Pass the cursor to `parse_next()` / `parse_next_m()` to read the next one. |
 | `no_buffer` | An `accum` scratch buffer was needed (escape decoding or cross-chunk string) but the **`parser`** was constructed **without `accum`** in `make_parser` / ctor. **Never returned by `parse_m()`.** |
-| `sv_cross_chunk` | A `jsonrefl::string_view_t`-typed value or key cannot live in the chosen feed shape. From `parse()` chunked: the value/key was split across two chunks (use `std::string`, or feed the whole document at once). From `parse_m()` chunked: contract C2 was violated by the producer. |
+| `sv_cross_chunk` | A `jsonrefl::string_view_t`- or `jsonrefl::value_t`-typed value or key cannot live in the chosen feed shape. From `parse()` chunked: the value/key was split across two chunks (use `std::string`, or feed the whole document at once). From `parse_m()` chunked: contract C2 was violated by the producer. |
 
 ### Parse flags
 
@@ -323,7 +346,7 @@ Without this flag the parser validates each byte of a string value and returns `
 
 ### `parse()` — single-shot
 
-`cursor parse(const char *ptr, std::size_t size)` — there is **no overload** that takes `string_view`/`std::string` directly; use `ptr` and `size`. If your span is already a **`jsonrefl::string_view_t` `sv`**, forward it as **`parse(sv.data(), sv.size())`**. No **`accum`** is needed unless the document contains strings with escapes that must be decoded into **`std::string`** members (`accum` is bound in **`make_parser`**, see [chunked `parse()`](#parse--streaming-chunked)). Parse flags, if any, are bound in `make_parser` too.
+`cursor parse(const char *ptr, std::size_t size)` — there is **no overload** that takes `string_view`/`std::string` directly; use `ptr` and `size`. If your span is already a **`jsonrefl::string_view_t` `sv`**, forward it as **`parse(sv.data(), sv.size())`**. No **`accum`** is needed unless the document contains escaped strings that must be decoded into **`std::string`** members or into scratch storage for **`jsonrefl::value_t`** string leaves (`accum` is bound in **`make_parser`**, see [chunked `parse()`](#parse--streaming-chunked)). Parse flags, if any, are bound in `make_parser` too.
 
 ```cpp
 config cfg{};
@@ -335,7 +358,7 @@ auto st = pp.parse(document, sizeof(document) - 1);
 // cfg.host == "localhost", cfg.port == 8080
 ```
 
-For `jsonrefl::string_view_t` members the result points directly into the input buffer — the buffer must outlive the target object.
+For `jsonrefl::string_view_t` and `jsonrefl::value_t` members the result points directly into the input buffer — the buffer must outlive the target object.
 
 ### `parse()` — streaming (chunked)
 
@@ -373,11 +396,11 @@ for (;;) {
 Notes on chunked `parse()`:
 
 - **No `accum` in `make_parser`** ⇒ as soon as the parser would need to buffer cross-chunk bytes or decode escapes, it returns `state::no_buffer`. `accum` may stay empty between calls — the parser only writes into it when needed.
-- **`jsonrefl::string_view_t` members under chunked feed** — if the value or key happens to span a chunk boundary, the parser cannot represent it as a contiguous slice of input. It returns `state::sv_cross_chunk` immediately on the chunk where the split is detected (no need to feed the next one to learn this). Use `std::string`, or pass the whole document in one `parse()` call, or use `parse_m()` on a mutable buffer.
+- **`jsonrefl::string_view_t` / `jsonrefl::value_t` members under chunked feed** — if the value or key happens to span a chunk boundary, the parser cannot represent it as a contiguous slice of input. It returns `state::sv_cross_chunk` immediately on the chunk where the split is detected (no need to feed the next one to learn this). Use `std::string`, or pass the whole document in one `parse()` call, or use `parse_m()` on a mutable buffer.
 
 ### `parse_m()` — in-source single-shot (zero-copy escapes)
 
-`parse_m(char *ptr, std::size_t size)` parses a *mutable* buffer in place. Escape sequences (`\n`, `\t`, `\"`, `\uXXXX`, surrogate pairs) are decoded **directly into the same buffer**, shrinking each string. `jsonrefl::string_view_t` members then point at fully-decoded slices — no `std::string` fallback, no `accum`, `state::no_buffer` is never returned:
+`parse_m(char *ptr, std::size_t size)` parses a *mutable* buffer in place. Escape sequences (`\n`, `\t`, `\"`, `\uXXXX`, surrogate pairs) are decoded **directly into the same buffer**, shrinking each string. `jsonrefl::string_view_t` and `jsonrefl::value_t` members then point at fully-decoded slices — no `std::string` fallback, no `accum`, `state::no_buffer` is never returned:
 
 ```cpp
 char buf[] = R"({"id":"42","msg":"hello\nworld","tag":"\uD83D\uDE00"})";
@@ -405,10 +428,10 @@ auto st = pp.parse_m(buf, sizeof(buf) - 1);
 
 `parse_m()` may also be called repeatedly with **different** mutable buffers, streaming a document through the parser without ever copying. Two contracts must hold:
 
-- **C1 — buffer lifetime.** Every buffer fed to `parse_m()` must outlive any `jsonrefl::string_view_t`-typed field that ended up pointing into it (typically: lifetime of the target object). Buffers are independent regions of memory — you can `recv()` each chunk into a fresh `std::vector<char>` and store them.
+- **C1 — buffer lifetime.** Every buffer fed to `parse_m()` must outlive any `jsonrefl::string_view_t`- or `jsonrefl::value_t`-typed field that ended up pointing into it (typically: lifetime of the target object). Buffers are independent regions of memory — you can `recv()` each chunk into a fresh `std::vector<char>` and store them.
 - **C2 — atomic leaves.** Every leaf JSON value (`string`, `number`, `true`, `false`, `null`) and every key, *together with the chain of bytes that terminates it*, lies entirely inside one buffer. The terminating chain is whatever bytes immediately follow the leaf in serialised form: a single `,` between siblings, or one or more closing `}`/`]` (when the leaf is the last item of one or more nested containers collapsing at once), optionally followed by a trailing `,`. Structural pieces in the middle of containers and whitespace between tokens may fall on any byte boundary.
 
-When both contracts hold, `parse_m()` returns `incomplete` after each non-final chunk and `ok` on the last one. `jsonrefl::string_view_t` members from earlier chunks remain valid because their backing buffers stay alive (C1).
+When both contracts hold, `parse_m()` returns `incomplete` after each non-final chunk and `ok` on the last one. `jsonrefl::string_view_t` and `jsonrefl::value_t` members from earlier chunks remain valid because their backing buffers stay alive (C1).
 
 `to_chunked_buffer()` automatically satisfies C2 in **compact mode** (`serialize_flags::none`) when both:
 
@@ -484,7 +507,7 @@ for ( ;; ) {
 }
 ```
 
-`parse_next` clears the bound `accum`, so any `jsonrefl::string_view_t` members of `obj` must be consumed (or copied out) **before** the next `parse_next` call.
+`parse_next` clears the bound `accum`, so any `jsonrefl::string_view_t` or `jsonrefl::value_t` members of `obj` must be consumed (or copied out) **before** the next `parse_next` call.
 
 **In-source (zero-copy) variant:**
 
@@ -736,6 +759,31 @@ if constexpr (meta_t::uses_minimal_index()) {
 ```
 
 `meta.dump(std::ostream&)` walks both flavours and prints the populated entries.
+
+## Installation
+
+Single header. Either copy it in:
+
+```bash
+cp jsonrefl/include/jsonrefl/jsonrefl.hpp /your/project/include/jsonrefl/
+```
+
+```cpp
+#include <jsonrefl/jsonrefl.hpp>
+```
+
+…or add the include path from CMake:
+
+```cmake
+cmake_minimum_required(VERSION 3.5)
+project(myapp LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include_directories(path/to/jsonrefl/include)
+add_executable(myapp main.cpp)
+```
 
 ## License
 

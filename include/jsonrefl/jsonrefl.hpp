@@ -635,8 +635,9 @@ constexpr decltype(auto) metadata() noexcept {
 enum class value_kind: std::uint8_t {
      null = 0
     ,string = 1
-    ,number = 2
-    ,boolean = 3
+    ,integer = 2
+    ,floating = 3
+    ,boolean = 4
 };
 
 enum class serialize_flags: std::uint8_t {
@@ -995,41 +996,75 @@ public:
 
     explicit operator string_view_t() const noexcept { return m_sv; }
 
-    optional_t<bool> to_bool() const noexcept
-    { return details::parse_bool_sv(m_sv); }
+    optional_t<bool> to_bool() const noexcept {
+        if ( m_kind != value_kind::boolean ) { return optional_t<bool>{}; }
 
-    optional_t<std::int8_t> to_int8() const noexcept
-    { return details::parse_integral_sv<std::int8_t>(m_sv); }
+        return details::parse_bool_sv(m_sv);
+    }
 
-    optional_t<std::uint8_t> to_uint8() const noexcept
-    { return details::parse_integral_sv<std::uint8_t>(m_sv); }
+    optional_t<std::int8_t> to_int8() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::int8_t>{}; }
 
-    optional_t<std::int16_t> to_int16() const noexcept
-    { return details::parse_integral_sv<std::int16_t>(m_sv); }
+        return details::parse_integral_sv<std::int8_t>(m_sv);
+    }
 
-    optional_t<std::uint16_t> to_uint16() const noexcept
-    { return details::parse_integral_sv<std::uint16_t>(m_sv); }
+    optional_t<std::uint8_t> to_uint8() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::uint8_t>{}; }
 
-    optional_t<std::int32_t> to_int32() const noexcept
-    { return details::parse_integral_sv<std::int32_t>(m_sv); }
+        return details::parse_integral_sv<std::uint8_t>(m_sv);
+    }
 
-    optional_t<std::uint32_t> to_uint32() const noexcept
-    { return details::parse_integral_sv<std::uint32_t>(m_sv); }
+    optional_t<std::int16_t> to_int16() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::int16_t>{}; }
 
-    optional_t<std::int64_t> to_int64() const noexcept
-    { return details::parse_integral_sv<std::int64_t>(m_sv); }
+        return details::parse_integral_sv<std::int16_t>(m_sv);
+    }
 
-    optional_t<std::uint64_t> to_uint64() const noexcept
-    { return details::parse_integral_sv<std::uint64_t>(m_sv); }
+    optional_t<std::uint16_t> to_uint16() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::uint16_t>{}; }
 
-    optional_t<float> to_float() const noexcept
-    { return details::parse_floating_sv<float>(m_sv); }
+        return details::parse_integral_sv<std::uint16_t>(m_sv);
+    }
 
-    optional_t<double> to_double() const noexcept
-    { return details::parse_floating_sv<double>(m_sv); }
+    optional_t<std::int32_t> to_int32() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::int32_t>{}; }
+
+        return details::parse_integral_sv<std::int32_t>(m_sv);
+    }
+
+    optional_t<std::uint32_t> to_uint32() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::uint32_t>{}; }
+
+        return details::parse_integral_sv<std::uint32_t>(m_sv);
+    }
+
+    optional_t<std::int64_t> to_int64() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::int64_t>{}; }
+
+        return details::parse_integral_sv<std::int64_t>(m_sv);
+    }
+
+    optional_t<std::uint64_t> to_uint64() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::uint64_t>{}; }
+
+        return details::parse_integral_sv<std::uint64_t>(m_sv);
+    }
+
+    optional_t<float> to_float() const noexcept {
+        if ( m_kind != value_kind::floating ) { return optional_t<float>{}; }
+
+        return details::parse_floating_sv<float>(m_sv);
+    }
+
+    optional_t<double> to_double() const noexcept {
+        if ( m_kind != value_kind::floating ) { return optional_t<double>{}; }
+
+        return details::parse_floating_sv<double>(m_sv);
+    }
 
     optional_t<std::string> to_string() const {
         if ( m_kind == value_kind::null && m_sv.empty() ) { return optional_t<std::string>{}; }
+        if ( m_kind != value_kind::string ) { return optional_t<std::string>{}; }
 
         return optional_t<std::string>{std::string(m_sv.data(), m_sv.size())};
     }
@@ -1045,17 +1080,25 @@ public:
          && !std::is_same<T, bool>::value
         ,optional_t<T>
     >::type
-    to() const noexcept
-    { return details::parse_integral_sv<T>(m_sv); }
+    to() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<T>{}; }
+
+        return details::parse_integral_sv<T>(m_sv);
+    }
 
     template<typename T>
     typename std::enable_if<std::is_floating_point<T>::value, optional_t<T>>::type
-    to() const noexcept
-    { return details::parse_floating_sv<T>(m_sv); }
+    to() const noexcept {
+        if ( m_kind != value_kind::floating ) { return optional_t<T>{}; }
+
+        return details::parse_floating_sv<T>(m_sv);
+    }
 
     template<typename T>
     typename std::enable_if<std::is_enum<T>::value, optional_t<T>>::type
     to() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<T>{}; }
+
         const auto raw = details::parse_integral_sv<std::underlying_type_t<T>>(m_sv);
         return raw
             ? optional_t<T>{static_cast<T>(*raw)}
@@ -1283,7 +1326,8 @@ inline std::size_t required_bytes_value_t(const value_t &v) noexcept {
 
             return n;
         }
-        case value_kind::number:
+        case value_kind::integer:
+        case value_kind::floating:
         case value_kind::boolean:
             return v.size();
 
@@ -1299,7 +1343,8 @@ inline char* write_value_t_json(char *ptr, const value_t &v) noexcept {
 
             return ptr + 4;
         }
-        case value_kind::number:
+        case value_kind::integer:
+        case value_kind::floating:
         case value_kind::boolean: {
             std::memcpy(ptr, v.data(), v.size());
 
@@ -1986,7 +2031,8 @@ inline bool stream_value_t_json(
         case value_kind::null:
             return w.write_token("null", 4, tail, tail_len);
 
-        case value_kind::number:
+        case value_kind::integer:
+        case value_kind::floating:
         case value_kind::boolean:
             return w.write_token(v.data(), v.size(), tail, tail_len);
 
@@ -4408,6 +4454,17 @@ inline bool is_num_char(char c) noexcept {
     return k_num[static_cast<unsigned char>(c)];
 }
 
+inline value_kind classify_number_lexeme(string_view_t sv) noexcept {
+    for ( std::size_t i = 0; i < sv.size(); ++i ) {
+        const char c = sv[i];
+        if ( c == '.' || c == 'e' || c == 'E' ) {
+            return value_kind::floating;
+        }
+    }
+
+    return value_kind::integer;
+}
+
 inline bool skip_line_comment(const char *&p, const char *end) noexcept {
     while ( p < end && *p != '\n' ) ++p;
     if ( p < end ) { ++p; return true; }
@@ -5207,7 +5264,7 @@ class parser {
         }
     }
 
-    state apply_int(string_view_t val, std::string *accum, value_kind kind = value_kind::number) {
+    state apply_int(string_view_t val, std::string *accum, value_kind kind) {
         const auto top = stack_top();
         const bool key_is_sv = top.map_setter && top.map_setter->map_key_is_string_view();
         if ( m_key_has_esc && !key_is_sv ) {
@@ -5421,7 +5478,7 @@ class parser {
             sv = string_view_t{accum->data() + m_value_off, accum->size() - m_value_off};
         } else
         { sv = string_view_t{m_seg_start, m_str_len}; }
-        const auto s = apply_int(sv, accum);
+        const auto s = apply_int(sv, accum, details::classify_number_lexeme(sv));
         if ( s != state::ok ) { return s; }
         after_value();
         return state::ok;
@@ -5804,7 +5861,11 @@ class parser {
                             const auto s = apply_null(accum);
                             if ( s != state::ok ) { return s; }
                         } else if ( m_lit_str[0] == 'N' || m_lit_str[0] == 'I' || m_lit_str[0] == '-' ) {
-                            const auto s = apply_int({m_lit_str, m_lit_len}, accum);
+                            const auto s = apply_int(
+                                 {m_lit_str, m_lit_len}
+                                ,accum
+                                ,value_kind::floating
+                            );
                             if ( s != state::ok ) { return s; }
                         } else {
                             const auto s = apply_int(

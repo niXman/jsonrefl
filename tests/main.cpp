@@ -2707,22 +2707,22 @@ bool test_skip_unknown_keys_nested_container() {
 
 bool test_value_t_to_conversions() {
     jsonrefl::value_t n;
-    n.assign("127", jsonrefl::value_kind::number);
+    n.assign("127", jsonrefl::value_kind::integer);
     CHECK(n.to_int8());
     const auto n8 = n.to_int8();
     CHECK(n8);
     CHECK_EQ(static_cast<int>(*n8), 127);
 
     jsonrefl::value_t bad;
-    bad.assign("128", jsonrefl::value_kind::number);
+    bad.assign("128", jsonrefl::value_kind::integer);
     CHECK(!bad.to_int8());
 
     jsonrefl::value_t ubad;
-    ubad.assign("256", jsonrefl::value_kind::number);
+    ubad.assign("256", jsonrefl::value_kind::integer);
     CHECK(!ubad.to_uint8());
 
     jsonrefl::value_t trail;
-    trail.assign("42 ", jsonrefl::value_kind::number);
+    trail.assign("42 ", jsonrefl::value_kind::integer);
     CHECK(!trail.to_int32());
 
     jsonrefl::value_t bool_v;
@@ -2732,9 +2732,15 @@ bool test_value_t_to_conversions() {
     CHECK_EQ(*bool_parsed, true);
 
     jsonrefl::value_t fv;
-    fv.assign("3.14", jsonrefl::value_kind::number);
+    fv.assign("3.14", jsonrefl::value_kind::floating);
     CHECK(fv.to_double());
     CHECK(fv.to_float());
+    CHECK(!fv.to_int32());
+
+    jsonrefl::value_t iv;
+    iv.assign("42", jsonrefl::value_kind::integer);
+    CHECK(iv.to_int32());
+    CHECK(!iv.to_double());
 
     jsonrefl::value_t sv;
     sv.assign("hello", jsonrefl::value_kind::string);
@@ -2749,13 +2755,52 @@ bool test_value_t_to_conversions() {
     return true;
 }
 
+bool test_value_t_integer_floating_kinds() {
+    std::map<std::string, jsonrefl::value_t> obj;
+    const jsonrefl::string_view_t js = R"({"i":-42,"z":0,"f":3.14,"e":1e5})";
+    auto p = jsonrefl::make_parser(&obj);
+    CHECK(p.parse(js.data(), js.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.at("i").kind() == jsonrefl::value_kind::integer);
+    CHECK(obj.at("z").kind() == jsonrefl::value_kind::integer);
+    CHECK(obj.at("f").kind() == jsonrefl::value_kind::floating);
+    CHECK(obj.at("e").kind() == jsonrefl::value_kind::floating);
+
+    const auto i = obj.at("i").to_int32();
+    CHECK(i);
+    CHECK_EQ(*i, -42);
+    const auto d = obj.at("f").to_double();
+    CHECK(d);
+    CHECK(d && *d > 3.13 && *d < 3.15);
+    CHECK(!obj.at("f").to_int32());
+    CHECK(!obj.at("i").to_double());
+
+    return true;
+}
+
+bool test_value_t_nonstandard_float_kind() {
+    std::map<std::string, jsonrefl::value_t> obj;
+    const jsonrefl::string_view_t js = R"({"nan":NaN,"inf":Infinity})";
+    auto p = jsonrefl::make_parser(
+         &obj
+        ,nullptr
+        ,jsonrefl::flags::allow_infinity_and_nan
+    );
+    CHECK(p.parse(js.data(), js.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.at("nan").kind() == jsonrefl::value_kind::floating);
+    CHECK(obj.at("inf").kind() == jsonrefl::value_kind::floating);
+    CHECK(obj.at("nan").to_double());
+    CHECK(obj.at("inf").to_double());
+
+    return true;
+}
+
 bool test_value_t_parse_and_convert() {
     value_fields obj{};
     const jsonrefl::string_view_t js = R"({"n":42,"s":"hi","b":true,"z":null})";
     std::string accum;
     auto p = jsonrefl::make_parser(&obj, &accum);
     CHECK(p.parse(js.data(), js.size()).status() == jsonrefl::state::ok);
-    CHECK(obj.n.kind() == jsonrefl::value_kind::number);
+    CHECK(obj.n.kind() == jsonrefl::value_kind::integer);
     CHECK(obj.s.kind() == jsonrefl::value_kind::string);
     CHECK(obj.b.kind() == jsonrefl::value_kind::boolean);
     CHECK(obj.z.kind() == jsonrefl::value_kind::null);
@@ -2794,7 +2839,7 @@ bool test_value_t_parse_m_zero_copy() {
 
 bool test_value_t_roundtrip() {
     value_fields in{};
-    in.n.assign("7", jsonrefl::value_kind::number);
+    in.n.assign("7", jsonrefl::value_kind::integer);
     in.s.assign("x\"y", jsonrefl::value_kind::string);
     in.b.assign("false", jsonrefl::value_kind::boolean);
     in.z.assign({}, jsonrefl::value_kind::null);
@@ -3923,6 +3968,8 @@ int main() {
         && JSONREFL_TEST(test_in_source_invalid_escape)
         && JSONREFL_TEST(test_in_source_sv_cross_chunk_string)
         && JSONREFL_TEST(test_value_t_to_conversions)
+        && JSONREFL_TEST(test_value_t_integer_floating_kinds)
+        && JSONREFL_TEST(test_value_t_nonstandard_float_kind)
         && JSONREFL_TEST(test_value_t_parse_and_convert)
         && JSONREFL_TEST(test_value_t_parse_m_zero_copy)
         && JSONREFL_TEST(test_value_t_roundtrip)
