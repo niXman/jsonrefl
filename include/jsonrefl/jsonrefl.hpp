@@ -500,6 +500,11 @@
 #define __JSONREFL_OBJECT_MEMBER(index, data, elem) \
     ,::jsonrefl::object_member(#elem, data elem)
 
+#define __JSONREFL_SCHEMA_FIELD(index, data, elem)                                \
+    seed = ::jsonrefl::details::schema_mix_field<                                 \
+        typename ::jsonrefl::details::member_ptr_value<decltype(data elem)>::type \
+    >(seed, #elem, sizeof(#elem) - 1u);
+
 #define JSONREFL_METADATA(_type, ...)                                            \
     JSONREFL_INLINE_VAR                                                          \
     constexpr auto __jsonrefl_meta_##_type = ::jsonrefl::object_holder(          \
@@ -508,6 +513,10 @@
     );                                                                           \
     constexpr const auto* __jsonrefl_adl_meta(_type*) noexcept {                 \
         return &__jsonrefl_meta_##_type;                                         \
+    }                                                                            \
+    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept { \
+        __JSONREFL_ENUM_ARGS(__JSONREFL_SCHEMA_FIELD, &_type::, __VA_ARGS__)     \
+        return seed;                                                             \
     }
 
 /*************************************************************************************************/
@@ -527,6 +536,11 @@
 #define __JSONREFL_STRUCT_META(index, data, elem) \
     ,__JSONREFL_STRUCT_META_I(data, __JSONREFL_PAIR_SECOND elem)
 
+#define __JSONREFL_SCHEMA_STRUCT_FIELD(index, data, elem)                                        \
+    seed = ::jsonrefl::details::schema_mix_field<                                                 \
+        typename ::jsonrefl::details::member_ptr_value<decltype(data __JSONREFL_PAIR_SECOND elem)>::type \
+    >(seed, __JSONREFL_STRINGIFY(__JSONREFL_PAIR_SECOND elem), sizeof(__JSONREFL_STRINGIFY(__JSONREFL_PAIR_SECOND elem)) - 1u);
+
 #define JSONREFL_STRUCT(_type, ...)                                              \
     struct _type {                                                               \
         __JSONREFL_ENUM_ARGS(__JSONREFL_STRUCT_FIELD, ~, __VA_ARGS__)            \
@@ -538,6 +552,10 @@
     );                                                                           \
     constexpr const auto* __jsonrefl_adl_meta(_type*) noexcept {                 \
         return &__jsonrefl_meta_##_type;                                         \
+    }                                                                            \
+    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept {      \
+        __JSONREFL_ENUM_ARGS(__JSONREFL_SCHEMA_STRUCT_FIELD, &_type::, __VA_ARGS__)               \
+        return seed;                                                             \
     }
 
 /*************************************************************************************************/
@@ -552,6 +570,11 @@
         ,data __JSONREFL_DOC_PAIR_NAME elem                              \
     )
 
+#define __JSONREFL_SCHEMA_FIELD_DOC(index, data, elem)                                              \
+    seed = ::jsonrefl::details::schema_mix_field<                                                   \
+        typename ::jsonrefl::details::member_ptr_value<decltype(data __JSONREFL_DOC_PAIR_NAME elem)>::type \
+    >(seed, __JSONREFL_STRINGIFY(__JSONREFL_DOC_PAIR_NAME elem), sizeof(__JSONREFL_STRINGIFY(__JSONREFL_DOC_PAIR_NAME elem)) - 1u);
+
 #define JSONREFL_METADATA_DOC(_type, ...)                                          \
     JSONREFL_INLINE_VAR                                                            \
     constexpr auto __jsonrefl_meta_##_type = ::jsonrefl::object_holder(            \
@@ -560,6 +583,10 @@
     );                                                                             \
     constexpr const auto* __jsonrefl_adl_meta(_type*) noexcept {                   \
         return &__jsonrefl_meta_##_type;                                           \
+    }                                                                              \
+    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept {        \
+        __JSONREFL_ENUM_ARGS(__JSONREFL_SCHEMA_FIELD_DOC, &_type::, __VA_ARGS__)   \
+        return seed;                                                               \
     }
 
 /*************************************************************************************************/
@@ -580,6 +607,11 @@
         ,data __JSONREFL_DOC_TRIP_NAME elem                              \
     )
 
+#define __JSONREFL_SCHEMA_STRUCT_FIELD_DOC(index, data, elem)                                       \
+    seed = ::jsonrefl::details::schema_mix_field<                                                    \
+        typename ::jsonrefl::details::member_ptr_value<decltype(data __JSONREFL_DOC_TRIP_NAME elem)>::type \
+    >(seed, __JSONREFL_STRINGIFY(__JSONREFL_DOC_TRIP_NAME elem), sizeof(__JSONREFL_STRINGIFY(__JSONREFL_DOC_TRIP_NAME elem)) - 1u);
+
 #define JSONREFL_STRUCT_DOC(_type, ...)                                            \
     struct _type {                                                                 \
         __JSONREFL_ENUM_ARGS(__JSONREFL_STRUCT_FIELD_DOC, ~, __VA_ARGS__)          \
@@ -591,6 +623,10 @@
     );                                                                             \
     constexpr const auto* __jsonrefl_adl_meta(_type*) noexcept {                   \
         return &__jsonrefl_meta_##_type;                                           \
+    }                                                                              \
+    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept {         \
+        __JSONREFL_ENUM_ARGS(__JSONREFL_SCHEMA_STRUCT_FIELD_DOC, &_type::, __VA_ARGS__)              \
+        return seed;                                                               \
     }
 
 /*************************************************************************************************/
@@ -1173,13 +1209,16 @@ constexpr It upper_bound(It first, It last, const T &value) noexcept {
 
 /*************************************************************************************************/
 
-constexpr std::uint32_t fnv1a(const char *p, std::size_t n) noexcept {
-    auto seed = 0x811c9dc5u;
+constexpr std::uint32_t fnv1a(std::uint32_t seed, const char *p, std::size_t n) noexcept {
     for ( std::size_t i = 0; i < n; ++i ) {
         seed = (seed ^ static_cast<std::uint32_t>(static_cast<unsigned char>(p[i]))) * 0x01000193u;
     }
 
     return seed;
+}
+
+constexpr std::uint32_t fnv1a(const char *p, std::size_t n) noexcept {
+    return fnv1a(0x811c9dc5u, p, n);
 }
 
 constexpr std::uint32_t fnv1a(string_view_t s) noexcept {
@@ -4379,6 +4418,111 @@ constexpr auto object_member(const char (&str)[N], const char (&doc)[D], T C::*m
 template<typename ...Members>
 constexpr auto object_holder(string_view_t name, Members && ...members) noexcept
 { return details::object_holder_t<Members...>{name, std::forward<Members>(members)...}; }
+
+/*************************************************************************************************/
+// compile-time structural fingerprint of a reflected type
+
+template<typename T>
+constexpr std::uint32_t schema_id(std::uint32_t seed = 0x811c9dc5u) noexcept;
+
+namespace details {
+
+template<typename U>
+constexpr char schema_tag() noexcept {
+    return has_metadata<U>::value               ? 'O'
+        : is_object_type<U>::value              ? 'M'
+        : is_array_type<U>::value               ? 'A'
+        : is_optional_type<U>::value            ? '?'
+        : std::is_same<U, string_view_t>::value ? 'V'
+        : std::is_same<U, value_t>::value       ? 'J'
+        : is_string_like_t<U>::value            ? 'S'
+        : std::is_same<U, bool>::value          ? 'B'
+        : std::is_floating_point<U>::value      ? 'F'
+        : std::is_enum<U>::value                ? 'E'
+        : std::is_unsigned<U>::value            ? 'U'
+        : std::is_integral<U>::value            ? 'I'
+        : '-'
+    ;
+}
+
+template<typename U>
+constexpr int schema_cat() noexcept {
+    return has_metadata<U>::value    ? 1
+        : is_array_type<U>::value    ? 2
+        : is_object_type<U>::value   ? 3
+        : is_optional_type<U>::value ? 4
+        : 0
+    ;
+}
+
+template<typename U>
+constexpr std::uint32_t schema_mix_type(std::uint32_t seed) noexcept;
+
+template<typename U, int Cat = schema_cat<U>()>
+struct schema_child_mixer {
+    static constexpr std::uint32_t apply(std::uint32_t seed) noexcept {
+        const char sz = static_cast<char>(sizeof(U) & 0xffu);
+
+        return fnv1a(seed, &sz, 1);
+    }
+};
+
+template<typename U>
+struct schema_child_mixer<U, 1> {
+    static constexpr std::uint32_t apply(std::uint32_t seed) noexcept
+    { return ::jsonrefl::schema_id<U>(seed); }
+};
+
+template<typename U>
+struct schema_child_mixer<U, 2> {
+    static constexpr std::uint32_t apply(std::uint32_t seed) noexcept
+    { return schema_mix_type<typename U::value_type>(seed); }
+};
+
+template<typename U>
+struct schema_child_mixer<U, 3> {
+    static constexpr std::uint32_t apply(std::uint32_t seed) noexcept
+    { return schema_mix_type<typename U::mapped_type>(seed); }
+};
+
+template<typename U>
+struct schema_child_mixer<U, 4> {
+    static constexpr std::uint32_t apply(std::uint32_t seed) noexcept
+    { return schema_mix_type<unwrap_optional_t<U>>(seed); }
+};
+
+template<typename U>
+constexpr std::uint32_t schema_mix_type(std::uint32_t seed) noexcept {
+    const char tag = schema_tag<U>();
+
+    return schema_child_mixer<U>::apply(fnv1a(seed, &tag, 1));
+}
+
+template<typename Field>
+constexpr std::uint32_t schema_mix_field(std::uint32_t seed, const char *name, std::size_t n) noexcept {
+    return schema_mix_type<Field>(fnv1a(seed, name, n));
+}
+
+template<typename> struct member_ptr_value;
+
+template<typename C, typename T>
+struct member_ptr_value<T C::*> { using type = T; };
+
+constexpr std::uint32_t __jsonrefl_adl_schema(const void *, std::uint32_t seed) noexcept
+{ return seed; }
+
+template<typename T>
+constexpr std::uint32_t resolve_schema(std::uint32_t seed) noexcept
+{ return __jsonrefl_adl_schema(static_cast<T *>(nullptr), seed); }
+
+} // ns details
+
+template<typename T>
+constexpr std::uint32_t schema_id(std::uint32_t seed) noexcept {
+    static_assert(has_metadata<T>::value, "schema_id<T>() requires a type registered with JSONREFL_METADATA/JSONREFL_STRUCT");
+
+    return details::resolve_schema<T>(seed);
+}
 
 /*************************************************************************************************/
 

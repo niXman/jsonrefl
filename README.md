@@ -16,6 +16,7 @@ No external dependencies. No external code generation. Just one header.
   - [`JSONREFL_METADATA` — for an existing struct](#jsonrefl_metadata--for-an-existing-struct)
   - [`JSONREFL_STRUCT` — declare and register in one shot](#jsonrefl_struct--declare-and-register-in-one-shot)
   - [Nested types and containers](#nested-types-and-containers)
+  - [Schema fingerprint (`schema_id`)](#schema-fingerprint-schema_id)
 - [Parsing](#parsing)
   - [State codes](#state-codes)
   - [Parse flags](#parse-flags)
@@ -58,6 +59,7 @@ User-facing capabilities (implementation details live in [Internals](#internals-
 - **Three serialization paths** — `to_string()`, `required_bytes()` + `to_buffer()` (one allocation, exact size), and `to_chunked_buffer()` (fixed-size buffer + flush callback for sockets / constrained memory).
 - **Pretty-print & doc comments** — every serialization function takes a `serialize_flags` bitmask (`pretty`, `comments`).
 - **Compile-time introspection** — query struct name, member count, and member types by name.
+- **Schema fingerprint** — `jsonrefl::schema_id<T>()` folds field names + types (recursively) into a `constexpr` `uint32_t` you can pin with a `static_assert` to catch accidental schema drift at build time (see [Schema fingerprint](#schema-fingerprint-schema_id)).
 - **Compile-time member index** — name → setter resolution is constant-cost on the parser hot path, with a clash-detection guarantee that turns name collisions into build errors.
 
 ## Quick Start
@@ -223,6 +225,32 @@ std::cout << jsonrefl::to_string(p, jsonrefl::serialize_flags::pretty) << '\n';
    ]
 }
 ```
+
+### Schema fingerprint (`schema_id`)
+
+`jsonrefl::schema_id<T>()` returns a `constexpr std::uint32_t` structural fingerprint of a registered type. It is an order-sensitive FNV-1a fold over every field's **name** plus a one-char **type tag**, recursing into nested reflected structs, array/list elements, map values and optionals. Pin it with a `static_assert` so that any accidental change to the wire schema breaks the build instead of silently changing what you parse/emit:
+
+```cpp
+struct user_t {
+    std::uint64_t id;
+    std::string   name;
+    std::vector<std::string> roles;
+};
+JSONREFL_METADATA(user_t, id, name, roles);
+
+// Lock the schema. Print the value once and paste it here:
+//   std::printf("0x%08x\n", jsonrefl::schema_id<user_t>());
+static_assert(jsonrefl::schema_id<user_t>() == 0x1a2b3c4du, "user_t schema changed — bump the API version / migration");
+```
+
+What changes the fingerprint:
+
+- **adding, removing, renaming or reordering** a field;
+- **changing a field's type category** (e.g. `int` → `std::string`, scalar → array/object/optional);
+- **changing a scalar field's width** (e.g. `int` → `short`);
+- **any of the above inside a nested reflected struct, array element, or map value** (the fold is recursive).
+
+What does **not** change it (by design): the struct's own type name, and per-field doc strings. Note the type tag is coarse-grained: two distinct types in the same category with the same width (e.g. `long` vs `long long` on LP64, or two different registered structs with an identical recursive shape) hash the same. The fingerprint is computed purely from static types and the field-name literals captured by the registration macros, so it works fully at compile time and never touches the runtime metadata object.
 
 ## Parsing
 

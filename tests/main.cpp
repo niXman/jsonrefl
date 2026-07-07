@@ -3866,6 +3866,117 @@ static bool test_version_macros() {
 }
 
 /***************************************************************************************************/
+// schema_id: compile-time structural fingerprint
+/***************************************************************************************************/
+
+namespace schema_test {
+
+struct base_v1     { int a; std::string b; };
+JSONREFL_METADATA(base_v1, a, b);
+
+struct base_clone  { int a; std::string b; };            // byte-for-byte the same shape as base_v1
+JSONREFL_METADATA(base_clone, a, b);
+
+struct added       { int a; std::string b; int c; };     // field added
+JSONREFL_METADATA(added, a, b, c);
+
+struct removed     { int a; };                            // field removed
+JSONREFL_METADATA(removed, a);
+
+struct renamed     { int a; std::string b_renamed; };     // field renamed
+JSONREFL_METADATA(renamed, a, b_renamed);
+
+struct reordered   { std::string b; int a; };             // fields reordered
+JSONREFL_METADATA(reordered, b, a);
+
+struct retyped_cat { int a; int b; };                     // b: string -> int (category tag differs)
+JSONREFL_METADATA(retyped_cat, a, b);
+
+struct width_int   { int a; };
+JSONREFL_METADATA(width_int, a);
+
+struct width_short { short a; };                          // same tag 'I' as int, differs only by sizeof
+JSONREFL_METADATA(width_short, a);
+
+struct inner_a     { int x; };
+JSONREFL_METADATA(inner_a, x);
+
+struct inner_b     { int x; long y; };                    // nested type gains a field
+JSONREFL_METADATA(inner_b, x, y);
+
+struct outer_a     { inner_a n; };
+JSONREFL_METADATA(outer_a, n);
+
+struct outer_b     { inner_b n; };                        // same field name/order, different nested shape
+JSONREFL_METADATA(outer_b, n);
+
+struct vec_int     { std::vector<int> v; };
+JSONREFL_METADATA(vec_int, v);
+
+struct vec_dbl     { std::vector<double> v; };            // array element type differs
+JSONREFL_METADATA(vec_dbl, v);
+
+struct map_int     { std::map<std::string, int> m; };
+JSONREFL_METADATA(map_int, m);
+
+struct map_dbl     { std::map<std::string, double> m; };  // map value type differs
+JSONREFL_METADATA(map_dbl, m);
+
+JSONREFL_STRUCT(via_struct_macro, (int, a), (std::string, b)); // JSONREFL_STRUCT path must match METADATA
+
+// strongest guarantee: purely compile-time.
+static_assert(jsonrefl::schema_id<base_v1>() == jsonrefl::schema_id<base_clone>(),   "identical shape must match");
+static_assert(jsonrefl::schema_id<base_v1>() == jsonrefl::schema_id<via_struct_macro>(), "STRUCT vs METADATA must match");
+static_assert(jsonrefl::schema_id<base_v1>() != jsonrefl::schema_id<added>(),         "add must differ");
+static_assert(jsonrefl::schema_id<base_v1>() != jsonrefl::schema_id<removed>(),       "remove must differ");
+static_assert(jsonrefl::schema_id<base_v1>() != jsonrefl::schema_id<renamed>(),       "rename must differ");
+static_assert(jsonrefl::schema_id<base_v1>() != jsonrefl::schema_id<reordered>(),     "reorder must differ");
+static_assert(jsonrefl::schema_id<base_v1>() != jsonrefl::schema_id<retyped_cat>(),   "retype (category) must differ");
+static_assert(jsonrefl::schema_id<width_int>() != jsonrefl::schema_id<width_short>(), "retype (width) must differ");
+static_assert(jsonrefl::schema_id<outer_a>() != jsonrefl::schema_id<outer_b>(),       "nested shape change must differ");
+static_assert(jsonrefl::schema_id<vec_int>() != jsonrefl::schema_id<vec_dbl>(),       "array element type must differ");
+static_assert(jsonrefl::schema_id<map_int>() != jsonrefl::schema_id<map_dbl>(),       "map value type must differ");
+
+} // ns schema_test
+
+bool test_schema_id_identical_shapes_match() {
+    CHECK_EQ(jsonrefl::schema_id<schema_test::base_v1>(), jsonrefl::schema_id<schema_test::base_clone>());
+    CHECK_EQ(jsonrefl::schema_id<schema_test::base_v1>(), jsonrefl::schema_id<schema_test::via_struct_macro>());
+    return true;
+}
+
+bool test_schema_id_detects_add_remove_rename_reorder() {
+    const auto base = jsonrefl::schema_id<schema_test::base_v1>();
+    CHECK(base != jsonrefl::schema_id<schema_test::added>());
+    CHECK(base != jsonrefl::schema_id<schema_test::removed>());
+    CHECK(base != jsonrefl::schema_id<schema_test::renamed>());
+    CHECK(base != jsonrefl::schema_id<schema_test::reordered>());
+    return true;
+}
+
+bool test_schema_id_detects_retype() {
+    CHECK(jsonrefl::schema_id<schema_test::base_v1>() != jsonrefl::schema_id<schema_test::retyped_cat>());
+    CHECK(jsonrefl::schema_id<schema_test::width_int>() != jsonrefl::schema_id<schema_test::width_short>());
+    return true;
+}
+
+bool test_schema_id_recurses_into_nested_and_containers() {
+    CHECK(jsonrefl::schema_id<schema_test::outer_a>() != jsonrefl::schema_id<schema_test::outer_b>());
+    CHECK(jsonrefl::schema_id<schema_test::vec_int>() != jsonrefl::schema_id<schema_test::vec_dbl>());
+    CHECK(jsonrefl::schema_id<schema_test::map_int>() != jsonrefl::schema_id<schema_test::map_dbl>());
+    return true;
+}
+
+bool test_schema_id_is_constexpr_and_deterministic() {
+    constexpr auto a = jsonrefl::schema_id<schema_test::base_v1>();
+    constexpr auto b = jsonrefl::schema_id<schema_test::base_v1>();
+    static_assert(a == b, "schema_id must be a deterministic constant expression");
+    CHECK_EQ(a, jsonrefl::schema_id<schema_test::base_v1>());
+    CHECK(a != 0u);
+    return true;
+}
+
+/***************************************************************************************************/
 
 int main() {
     const bool ok =
