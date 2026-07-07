@@ -2956,6 +2956,8 @@ public:
         ,m_ptr{ptr}
     {}
 
+    constexpr T C::* member_ptr() const noexcept { return m_ptr; }
+
     const object_holder_base* get_metadata() const noexcept override
     { return get_inner_metadata_holder(bool_constant<jsonrefl::has_metadata<inner_type>::value>{}); }
 
@@ -4086,6 +4088,11 @@ public:
     static constexpr bool uses_minimal_index() noexcept { return k_use_linear; }
     constexpr const index_type& index() const noexcept { return m_index; }
 
+    static constexpr std::size_t member_count() noexcept { return sizeof...(Types); }
+
+    template<typename F>
+    void visit(F &&f) const { details::tuple_for_each(std::forward<F>(f), m_tuple); }
+
     std::ostream& dump(std::ostream &os) const {
         // print tuple (not sorted)
         os << "-- hash --  -- name --  -- address -- type --" << std::endl;
@@ -4420,7 +4427,6 @@ constexpr auto object_holder(string_view_t name, Members && ...members) noexcept
 { return details::object_holder_t<Members...>{name, std::forward<Members>(members)...}; }
 
 /*************************************************************************************************/
-// compile-time structural fingerprint of a reflected type
 
 template<typename T>
 constexpr std::uint32_t schema_id(std::uint32_t seed = 0x811c9dc5u) noexcept;
@@ -4516,6 +4522,17 @@ constexpr std::uint32_t resolve_schema(std::uint32_t seed) noexcept
 { return __jsonrefl_adl_schema(static_cast<T *>(nullptr), seed); }
 
 } // ns details
+
+/*************************************************************************************************/
+
+template<typename T, typename F>
+void for_each(const T &obj, F &&f) {
+    static_assert(has_metadata<T>::value, "for_each requires a type registered with JSONREFL_METADATA/JSONREFL_STRUCT");
+
+    metadata<T>().visit([&obj, &f](const auto &m) {
+        f(m.name, obj.*(m.member.member_ptr()));
+    });
+}
 
 template<typename T>
 constexpr std::uint32_t schema_id(std::uint32_t seed) noexcept {

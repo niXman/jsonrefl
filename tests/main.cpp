@@ -3977,6 +3977,78 @@ bool test_schema_id_is_constexpr_and_deterministic() {
 }
 
 /***************************************************************************************************/
+// for_each: generic (non-JSON) member iteration
+/***************************************************************************************************/
+
+namespace feach_test {
+
+struct pt  { int x; int y; };
+JSONREFL_METADATA(pt, x, y);
+
+struct seg { pt a; pt b; std::string tag; std::vector<int> ns; };
+JSONREFL_METADATA(seg, a, b, tag, ns);
+
+template<typename T> using reflected = jsonrefl::has_metadata<T>;
+
+template<typename T, std::enable_if_t<reflected<T>::value, int> = 0>
+void dump(std::ostream &os, const T &v);
+
+template<typename U, std::enable_if_t<!reflected<U>::value, int> = 0>
+void dump_value(std::ostream &os, const U &v) { os << v; }
+
+template<typename U>
+void dump_value(std::ostream &os, const std::vector<U> &v) {
+    os << '[';
+    bool first = true;
+    for ( const auto &e: v ) { if ( !first ) { os << ','; } first = false; dump_value(os, e); }
+    os << ']';
+}
+
+template<typename T, std::enable_if_t<reflected<T>::value, int> = 0>
+void dump_value(std::ostream &os, const T &v) { dump(os, v); }
+
+template<typename T, std::enable_if_t<reflected<T>::value, int>>
+void dump(std::ostream &os, const T &v) {
+    os << jsonrefl::metadata<T>().name() << '{';
+    bool first = true;
+    jsonrefl::for_each(v, [&os, &first](jsonrefl::string_view_t name, const auto &value) {
+        if ( !first ) { os << ", "; }
+        first = false;
+        os << name << '=';
+        dump_value(os, value);
+    });
+    os << '}';
+}
+
+} // ns feach_test
+
+bool test_for_each_shallow_names_and_values() {
+    feach_test::pt p{10, 20};
+
+    std::vector<std::string> names;
+    std::ostringstream vals;
+    jsonrefl::for_each(p, [&names, &vals](jsonrefl::string_view_t n, const auto &v) {
+        names.emplace_back(n);
+        vals << v << ';';
+    });
+
+    CHECK_EQ(names.size(), 2u);
+    CHECK_EQ(names[0], std::string("x"));
+    CHECK_EQ(names[1], std::string("y"));
+    CHECK_EQ(vals.str(), std::string("10;20;"));
+    CHECK_EQ(jsonrefl::metadata<feach_test::seg>().member_count(), 4u);
+    return true;
+}
+
+bool test_for_each_recursive_dump() {
+    feach_test::seg s{ {1, 2}, {3, 4}, "x", {5, 6, 7} };
+    std::ostringstream os;
+    feach_test::dump(os, s);
+    CHECK_EQ(os.str(), std::string("seg{a=pt{x=1, y=2}, b=pt{x=3, y=4}, tag=x, ns=[5,6,7]}"));
+    return true;
+}
+
+/***************************************************************************************************/
 
 int main() {
     const bool ok =
@@ -4178,6 +4250,13 @@ int main() {
         && JSONREFL_TEST(test_doc_comments_empty_doc_no_emit)
         && JSONREFL_TEST(test_doc_comments_chunked)
         && JSONREFL_TEST(test_flags_combine_operators)
+        && JSONREFL_TEST(test_schema_id_identical_shapes_match)
+        && JSONREFL_TEST(test_schema_id_detects_add_remove_rename_reorder)
+        && JSONREFL_TEST(test_schema_id_detects_retype)
+        && JSONREFL_TEST(test_schema_id_recurses_into_nested_and_containers)
+        && JSONREFL_TEST(test_schema_id_is_constexpr_and_deterministic)
+        && JSONREFL_TEST(test_for_each_shallow_names_and_values)
+        && JSONREFL_TEST(test_for_each_recursive_dump)
     ;
 
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

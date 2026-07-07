@@ -17,6 +17,7 @@ No external dependencies. No external code generation. Just one header.
   - [`JSONREFL_STRUCT` — declare and register in one shot](#jsonrefl_struct--declare-and-register-in-one-shot)
   - [Nested types and containers](#nested-types-and-containers)
   - [Schema fingerprint (`schema_id`)](#schema-fingerprint-schema_id)
+  - [Generic member iteration (`for_each`)](#generic-member-iteration-for_each)
 - [Parsing](#parsing)
   - [State codes](#state-codes)
   - [Parse flags](#parse-flags)
@@ -60,6 +61,7 @@ User-facing capabilities (implementation details live in [Internals](#internals-
 - **Pretty-print & doc comments** — every serialization function takes a `serialize_flags` bitmask (`pretty`, `comments`).
 - **Compile-time introspection** — query struct name, member count, and member types by name.
 - **Schema fingerprint** — `jsonrefl::schema_id<T>()` folds field names + types (recursively) into a `constexpr` `uint32_t` you can pin with a `static_assert` to catch accidental schema drift at build time (see [Schema fingerprint](#schema-fingerprint-schema_id)).
+- **Generic member iteration** — `jsonrefl::for_each(obj, f)` visits each field as `(name, typed value)`, so you can build your own non-JSON tooling (a custom `operator<<`, a debug dumper, a diff, ...) without any of that logic living in jsonrefl (see [Generic member iteration](#generic-member-iteration-for_each)).
 - **Compile-time member index** — name → setter resolution is constant-cost on the parser hot path, with a clash-detection guarantee that turns name collisions into build errors.
 
 ## Quick Start
@@ -251,6 +253,58 @@ What changes the fingerprint:
 - **any of the above inside a nested reflected struct, array element, or map value** (the fold is recursive).
 
 What does **not** change it (by design): the struct's own type name, and per-field doc strings. Note the type tag is coarse-grained: two distinct types in the same category with the same width (e.g. `long` vs `long long` on LP64, or two different registered structs with an identical recursive shape) hash the same. The fingerprint is computed purely from static types and the field-name literals captured by the registration macros, so it works fully at compile time and never touches the runtime metadata object.
+
+### Generic member iteration (`for_each`)
+
+`jsonrefl::for_each(obj, f)` is a small, format-agnostic reflection primitive: it invokes `f(name, value)` once per declared member of a registered struct, in declaration order, preserving each member's **static type**. `name` is a `jsonrefl::string_view_t`; `value` is a `const` reference to the actual member subobject — the declared type is passed **as-is** (an `optional_t<...>`, `std::vector<...>` or nested reflected struct is not unwrapped), so the callback decides what to do. Iteration is **shallow** — recurse by calling `for_each` again on any member that is itself a registered struct. jsonrefl deliberately ships no printing/streaming code; you build that on top.
+
+For example, a generic non-JSON `operator<<` — defined entirely in your code, not in the library:
+
+```cpp
+template<typename T>
+using reflected = jsonrefl::has_metadata<T>;
+
+template<typename T, std::enable_if_t<reflected<T>::value, int> = 0>
+std::ostream& operator<<(std::ostream &os, const T &v);
+
+template<typename U, std::enable_if_t<!reflected<U>::value, int> = 0>
+void stream_value(std::ostream &os, const U &v) { os << v; }
+
+template<typename U>
+void stream_value(std::ostream &os, const std::vector<U> &v) {
+    os << '[';
+    bool first = true;
+    for ( const auto &e: v ) { if ( !first ) { os << ", "; } first = false; stream_value(os, e); }
+    os << ']';
+}
+
+template<typename T, std::enable_if_t<reflected<T>::value, int> = 0>
+void stream_value(std::ostream &os, const T &v) { os << v; } // recurses via operator<< below
+
+template<typename T, std::enable_if_t<reflected<T>::value, int>>
+std::ostream& operator<<(std::ostream &os, const T &v) {
+    os << jsonrefl::metadata<T>().name() << '{';
+    bool first = true;
+    jsonrefl::for_each(v, [&](jsonrefl::string_view_t name, const auto &value) {
+        if ( !first ) { os << ", "; }
+        first = false;
+        os << name << '=';
+        stream_value(os, value);
+    });
+    return os << '}';
+}
+```
+
+```cpp
+struct point { int x; int y; };                                   JSONREFL_METADATA(point, x, y);
+struct line  { point a; point b; std::vector<int> marks; };       JSONREFL_METADATA(line, a, b, marks);
+
+line l{ {1,2}, {3,4}, {5,6,7} };
+std::cout << l << '\n';
+// line{a=point{x=1, y=2}, b=point{x=3, y=4}, marks=[5, 6, 7]}
+```
+
+`jsonrefl::metadata<T>().member_count()` returns the field count if you need it.
 
 ## Parsing
 
