@@ -536,10 +536,16 @@
 #define __JSONREFL_STRUCT_META(index, data, elem) \
     ,__JSONREFL_STRUCT_META_I(data, __JSONREFL_PAIR_SECOND elem)
 
-#define __JSONREFL_SCHEMA_STRUCT_FIELD(index, data, elem)                                        \
-    seed = ::jsonrefl::details::schema_mix_field<                                                 \
-        typename ::jsonrefl::details::member_ptr_value<decltype(data __JSONREFL_PAIR_SECOND elem)>::type \
-    >(seed, __JSONREFL_STRINGIFY(__JSONREFL_PAIR_SECOND elem), sizeof(__JSONREFL_STRINGIFY(__JSONREFL_PAIR_SECOND elem)) - 1u);
+#define __JSONREFL_SCHEMA_STRUCT_FIELD(index, data, elem)                \
+    seed = ::jsonrefl::details::schema_mix_field<                        \
+        typename ::jsonrefl::details::member_ptr_value<                  \
+            decltype(data __JSONREFL_PAIR_SECOND elem)                   \
+        >::type                                                          \
+    >(                                                                   \
+         seed                                                            \
+        ,__JSONREFL_STRINGIFY(__JSONREFL_PAIR_SECOND elem)               \
+        , sizeof(__JSONREFL_STRINGIFY(__JSONREFL_PAIR_SECOND elem)) - 1u \
+    );
 
 #define JSONREFL_STRUCT(_type, ...)                                              \
     struct _type {                                                               \
@@ -570,10 +576,16 @@
         ,data __JSONREFL_DOC_PAIR_NAME elem                              \
     )
 
-#define __JSONREFL_SCHEMA_FIELD_DOC(index, data, elem)                                              \
-    seed = ::jsonrefl::details::schema_mix_field<                                                   \
-        typename ::jsonrefl::details::member_ptr_value<decltype(data __JSONREFL_DOC_PAIR_NAME elem)>::type \
-    >(seed, __JSONREFL_STRINGIFY(__JSONREFL_DOC_PAIR_NAME elem), sizeof(__JSONREFL_STRINGIFY(__JSONREFL_DOC_PAIR_NAME elem)) - 1u);
+#define __JSONREFL_SCHEMA_FIELD_DOC(index, data, elem)                    \
+    seed = ::jsonrefl::details::schema_mix_field<                         \
+        typename ::jsonrefl::details::member_ptr_value<                   \
+            decltype(data __JSONREFL_DOC_PAIR_NAME elem)                  \
+        >::type                                                           \
+    >(                                                                    \
+         seed                                                             \
+        ,__JSONREFL_STRINGIFY(__JSONREFL_DOC_PAIR_NAME elem)              \
+        ,sizeof(__JSONREFL_STRINGIFY(__JSONREFL_DOC_PAIR_NAME elem)) - 1u \
+    );
 
 #define JSONREFL_METADATA_DOC(_type, ...)                                          \
     JSONREFL_INLINE_VAR                                                            \
@@ -584,7 +596,7 @@
     constexpr const auto* __jsonrefl_adl_meta(_type*) noexcept {                   \
         return &__jsonrefl_meta_##_type;                                           \
     }                                                                              \
-    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept {        \
+    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept { \
         __JSONREFL_ENUM_ARGS(__JSONREFL_SCHEMA_FIELD_DOC, &_type::, __VA_ARGS__)   \
         return seed;                                                               \
     }
@@ -607,10 +619,16 @@
         ,data __JSONREFL_DOC_TRIP_NAME elem                              \
     )
 
-#define __JSONREFL_SCHEMA_STRUCT_FIELD_DOC(index, data, elem)                                       \
-    seed = ::jsonrefl::details::schema_mix_field<                                                    \
-        typename ::jsonrefl::details::member_ptr_value<decltype(data __JSONREFL_DOC_TRIP_NAME elem)>::type \
-    >(seed, __JSONREFL_STRINGIFY(__JSONREFL_DOC_TRIP_NAME elem), sizeof(__JSONREFL_STRINGIFY(__JSONREFL_DOC_TRIP_NAME elem)) - 1u);
+#define __JSONREFL_SCHEMA_STRUCT_FIELD_DOC(index, data, elem)             \
+    seed = ::jsonrefl::details::schema_mix_field<                         \
+        typename ::jsonrefl::details::member_ptr_value<                   \
+            decltype(data __JSONREFL_DOC_TRIP_NAME elem)                  \
+        >::type                                                           \
+    >(                                                                    \
+         seed                                                             \
+        ,__JSONREFL_STRINGIFY(__JSONREFL_DOC_TRIP_NAME elem)              \
+        ,sizeof(__JSONREFL_STRINGIFY(__JSONREFL_DOC_TRIP_NAME elem)) - 1u \
+    );
 
 #define JSONREFL_STRUCT_DOC(_type, ...)                                            \
     struct _type {                                                                 \
@@ -624,8 +642,8 @@
     constexpr const auto* __jsonrefl_adl_meta(_type*) noexcept {                   \
         return &__jsonrefl_meta_##_type;                                           \
     }                                                                              \
-    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept {         \
-        __JSONREFL_ENUM_ARGS(__JSONREFL_SCHEMA_STRUCT_FIELD_DOC, &_type::, __VA_ARGS__)              \
+    constexpr ::std::uint32_t __jsonrefl_adl_schema(_type*, ::std::uint32_t seed) noexcept { \
+        __JSONREFL_ENUM_ARGS(__JSONREFL_SCHEMA_STRUCT_FIELD_DOC, &_type::, __VA_ARGS__)      \
         return seed;                                                               \
     }
 
@@ -648,12 +666,13 @@ using bool_constant = std::integral_constant<bool, B>;
 /*************************************************************************************************/
 
 namespace details {
-    constexpr std::nullptr_t __jsonrefl_adl_meta(...) noexcept { return nullptr; }
 
-    template<typename T>
-    constexpr auto __jsonrefl_resolve_meta() noexcept {
-        return __jsonrefl_adl_meta(static_cast<T *>(nullptr));
-    }
+constexpr std::nullptr_t __jsonrefl_adl_meta(...) noexcept { return nullptr; }
+
+template<typename T>
+constexpr auto __jsonrefl_resolve_meta() noexcept
+{ return __jsonrefl_adl_meta(static_cast<T *>(nullptr)); }
+
 } // ns details
 
 /*************************************************************************************************/
@@ -664,9 +683,8 @@ struct has_metadata: bool_constant<
 > {};
 
 template<typename T>
-constexpr decltype(auto) metadata() noexcept {
-    return *details::__jsonrefl_resolve_meta<T>();
-}
+constexpr decltype(auto) metadata() noexcept
+{ return *details::__jsonrefl_resolve_meta<T>(); }
 
 enum class value_kind: std::uint8_t {
      null = 0
@@ -1217,13 +1235,11 @@ constexpr std::uint32_t fnv1a(std::uint32_t seed, const char *p, std::size_t n) 
     return seed;
 }
 
-constexpr std::uint32_t fnv1a(const char *p, std::size_t n) noexcept {
-    return fnv1a(0x811c9dc5u, p, n);
-}
+constexpr std::uint32_t fnv1a(const char *p, std::size_t n) noexcept
+{ return fnv1a(0x811c9dc5u, p, n); }
 
-constexpr std::uint32_t fnv1a(string_view_t s) noexcept {
-    return fnv1a(s.data(), s.size());
-}
+constexpr std::uint32_t fnv1a(string_view_t s) noexcept
+{ return fnv1a(s.data(), s.size()); }
 
 /*************************************************************************************************/
 
@@ -4402,7 +4418,129 @@ constexpr std::size_t max_member_depth(const object_holder_t<Types...> &) noexce
     return jsonrefl_max(::jsonrefl::stack_depth<typename member_type_of<Types>::type>()...);
 }
 
+/*************************************************************************************************/
+
+template<bool... Bs>
+struct any_of_bools;
+
+template<>
+struct any_of_bools<> : std::false_type {};
+
+template<bool B0, bool... Rest>
+struct any_of_bools<B0, Rest...>
+    : bool_constant<B0 || any_of_bools<Rest...>::value>
+{};
+
+template<typename ...Types>
+constexpr bool may_retain_feed_views_members(const object_holder_t<Types...> &) noexcept;
+
+template<typename T, typename = void>
+struct may_retain_feed_views_holder : std::false_type {};
+
+template<>
+struct may_retain_feed_views_holder<string_view_t, void> : std::true_type {};
+
+template<>
+struct may_retain_feed_views_holder<value_t, void> : std::true_type {};
+
+template<typename T>
+struct may_retain_feed_views_holder<
+     T
+    ,typename std::enable_if<is_optional_type<T>::value>::type
+> : may_retain_feed_views_holder<unwrap_optional_t<T>>
+{};
+
+template<typename T>
+struct may_retain_feed_views_holder<
+     T
+    ,typename std::enable_if<
+        !is_optional_type<T>::value && has_metadata<T>::value
+    >::type
+> : bool_constant<may_retain_feed_views_members(metadata<T>())>
+{};
+
+template<typename T>
+struct may_retain_feed_views_holder<
+     T
+    ,typename std::enable_if<
+        !is_optional_type<T>::value
+        && !has_metadata<T>::value
+        && is_array_type<T>::value
+    >::type
+> : may_retain_feed_views_holder<unwrap_optional_t<typename T::value_type>>
+{};
+
+template<typename T>
+struct may_retain_feed_views_holder<
+     T
+    ,typename std::enable_if<
+        !is_optional_type<T>::value
+        && !has_metadata<T>::value
+        && !is_array_type<T>::value
+        && is_object_type<T>::value
+    >::type
+> : bool_constant<
+        std::is_same<typename T::key_type, string_view_t>::value
+        || may_retain_feed_views_holder<unwrap_optional_t<typename T::mapped_type>>::value
+    >
+{};
+
+template<typename ...Types>
+constexpr bool may_retain_feed_views_members(const object_holder_t<Types...> &) noexcept {
+    return any_of_bools<
+        may_retain_feed_views_holder<typename member_type_of<Types>::type>::value...
+    >::value;
+}
+
+template<typename T, typename = void>
+struct may_have_object_keys_holder : std::false_type {};
+
+template<typename T>
+struct may_have_object_keys_holder<
+     T
+    ,typename std::enable_if<is_optional_type<T>::value>::type
+> : may_have_object_keys_holder<unwrap_optional_t<T>>
+{};
+
+template<typename T>
+struct may_have_object_keys_holder<
+     T
+    ,typename std::enable_if<
+        !is_optional_type<T>::value && has_metadata<T>::value
+    >::type
+> : std::true_type
+{};
+
+template<typename T>
+struct may_have_object_keys_holder<
+     T
+    ,typename std::enable_if<
+        !is_optional_type<T>::value
+        && !has_metadata<T>::value
+        && is_object_type<T>::value
+    >::type
+> : std::true_type
+{};
+
+template<typename T>
+struct may_have_object_keys_holder<
+     T
+    ,typename std::enable_if<
+        !is_optional_type<T>::value
+        && !has_metadata<T>::value
+        && !is_object_type<T>::value
+        && is_array_type<T>::value
+    >::type
+> : may_have_object_keys_holder<unwrap_optional_t<typename T::value_type>>
+{};
+
 } // ns details
+
+template<typename T>
+struct may_retain_feed_views : details::may_retain_feed_views_holder<T> {};
+
+template<typename T>
+struct may_have_object_keys : details::may_have_object_keys_holder<T> {};
 
 /*************************************************************************************************/
 
@@ -4505,9 +4643,8 @@ constexpr std::uint32_t schema_mix_type(std::uint32_t seed) noexcept {
 }
 
 template<typename Field>
-constexpr std::uint32_t schema_mix_field(std::uint32_t seed, const char *name, std::size_t n) noexcept {
-    return schema_mix_type<Field>(fnv1a(seed, name, n));
-}
+constexpr std::uint32_t schema_mix_field(std::uint32_t seed, const char *name, std::size_t n) noexcept
+{ return schema_mix_type<Field>(fnv1a(seed, name, n)); }
 
 template<typename> struct member_ptr_value;
 
@@ -4790,10 +4927,12 @@ struct cursor {
         :m_st{state::ok}
         ,m_next{nullptr}
         ,m_remaining{0}
+        ,m_buffer_releasable{false}
     {}
 
     state status() const noexcept { return m_st; }
     std::size_t remaining() const noexcept { return m_remaining; }
+    bool buffer_releasable() const noexcept { return m_buffer_releasable; }
 
 private:
     template<typename, std::size_t>
@@ -4802,6 +4941,7 @@ private:
     state       m_st;
     const char *m_next;
     std::size_t m_remaining;
+    bool        m_buffer_releasable;
 };
 
 /*************************************************************************************************/
@@ -4813,6 +4953,10 @@ class parser {
          has_metadata<C>::value || details::is_object_or_array<C>::value
         ,"not has_metadata, nor is_object_or_array"
     );
+
+    static constexpr bool k_may_retain_feed_views = may_retain_feed_views<C>::value;
+    static constexpr bool k_may_have_object_keys = may_have_object_keys<C>::value;
+    static constexpr bool k_track_feed_buffer = k_may_retain_feed_views || k_may_have_object_keys;
 
     enum class json_state: uint8_t {
          value
@@ -4866,6 +5010,8 @@ class parser {
     const char *m_skv_lit_src;
     std::size_t m_skv_lit_i;
     std::size_t m_skv_lit_n;
+    const char *m_feed_begin;
+    const char *m_feed_end;
     std::array<stack_elem, MaxNesting> m_stack;
     int m_stack_idx;
     int m_ctx_depth;
@@ -4878,6 +5024,7 @@ class parser {
     bool m_is_key;
     bool m_accumulating;
     bool m_skip_next_value;
+    bool m_feed_retained;
     bool m_skv_num;
     std::uint8_t m_skv_str_mode;
     std::uint8_t m_skv_u4_remain;
@@ -4897,13 +5044,11 @@ class parser {
         return true;
     }
 
-    void stack_pop() noexcept {
-        if ( m_stack_idx >= 0 ) { m_stack[m_stack_idx--] = stack_elem{}; }
-    }
+    void stack_pop() noexcept
+    { if ( m_stack_idx >= 0 ) { m_stack[m_stack_idx--] = stack_elem{}; } }
 
-    stack_elem stack_top() const noexcept {
-        return m_stack_idx >= 0 ? m_stack[m_stack_idx] : stack_elem{};
-    }
+    stack_elem stack_top() const noexcept
+    { return m_stack_idx >= 0 ? m_stack[m_stack_idx] : stack_elem{}; }
 
     bool ctx_push(json_context c) noexcept {
         if ( static_cast<std::size_t>(m_ctx_depth + 1) >= MaxNesting ) { return false; }
@@ -4943,6 +5088,50 @@ class parser {
             ? string_view_t{accum->data() + m_key_off, m_key_len}
             : string_view_t{m_key_inline_ptr, m_key_len}
         ;
+    }
+
+    bool ptr_in_feed(const char *p) const noexcept {
+        return p != nullptr
+            && m_feed_begin != nullptr
+            && p >= m_feed_begin
+            && p < m_feed_end;
+    }
+
+    void note_view_in_feed(string_view_t sv) noexcept
+    { note_view_in_feed_impl(sv, bool_constant<k_may_retain_feed_views>{}); }
+
+    void note_view_in_feed_impl(string_view_t, std::false_type) noexcept {}
+
+    void note_view_in_feed_impl(string_view_t sv, std::true_type) noexcept
+    { if ( ptr_in_feed(sv.data()) ) { m_feed_retained = true; } }
+
+    bool pending_key_retains_feed() const noexcept
+    { return m_key_len > 0 && !m_key_in_accum && ptr_in_feed(m_key_inline_ptr); }
+
+    bool buffer_releasable_ok(std::false_type, std::false_type) const noexcept
+    { return true; }
+
+    bool buffer_releasable_ok(std::false_type, std::true_type) const noexcept
+    { return !pending_key_retains_feed(); }
+
+    bool buffer_releasable_ok(std::true_type, std::false_type) const noexcept
+    { return !m_feed_retained; }
+
+    bool buffer_releasable_ok(std::true_type, std::true_type) const noexcept
+    { return !m_feed_retained && !pending_key_retains_feed(); }
+
+    bool compute_buffer_releasable(state st) const noexcept {
+        switch ( st ) {
+            case state::ok:
+            case state::incomplete:
+            case state::record_end:
+                return buffer_releasable_ok(
+                     bool_constant<k_may_retain_feed_views>{}
+                    ,bool_constant<k_may_have_object_keys>{}
+                );
+            default:
+                return false;
+        }
     }
 
     void after_value() noexcept {
@@ -5433,15 +5622,19 @@ class parser {
             if ( s != state::ok ) { return s; }
         }
         const auto key_sv = current_key(accum);
+        if ( key_is_sv ) { note_view_in_feed(key_sv); }
         if ( top.holder != nullptr ) {
             const auto *setter = top.holder->get(key_sv);
             if ( !setter ) { return state::invalid; }
+            if ( setter->is_value_t() ) { note_view_in_feed(val); }
             if ( !setter->set_leaf(top.addr, val, kind) ) { return state::invalid; }
         }
         else if ( top.map_setter ) {
+            if ( top.map_setter->map_value_is_value_t() ) { note_view_in_feed(val); }
             if ( !top.map_setter->set_map_leaf(top.addr, key_sv, val, kind) ) { return state::invalid; }
         }
         else {
+            if ( top.arr_setter->element_is_value_t() ) { note_view_in_feed(val); }
             if ( !top.arr_setter->set_leaf(top.addr, val, kind) ) { return state::invalid; }
         }
         reset_key();
@@ -5456,6 +5649,7 @@ class parser {
             const auto s = decode_key(accum);
             if ( s != state::ok ) { return s; }
         }
+        if ( key_is_sv ) { note_view_in_feed(current_key(accum)); }
         if ( top.holder != nullptr ) {
             const auto key_sv = current_key(accum);
             const auto *setter = top.holder->get(key_sv);
@@ -5486,6 +5680,7 @@ class parser {
                 const auto s = decode_value(accum, val);
                 if ( s != state::ok ) { return s; }
             }
+            if ( setter->is_string_view() || setter->is_value_t() ) { note_view_in_feed(val); }
             if ( !setter->set_leaf(top.addr, val, value_kind::string) ) { return state::invalid; }
         } else if ( top.map_setter ) {
             if ( m_accumulating && (top.map_setter->map_value_is_string_view()
@@ -5501,6 +5696,12 @@ class parser {
                 const auto s = decode_key(accum);
                 if ( s != state::ok ) { return s; }
             }
+            if ( top.map_setter->map_key_is_string_view() ) {
+                note_view_in_feed(current_key(accum));
+            }
+            if ( top.map_setter->map_value_is_string_view()
+                    || top.map_setter->map_value_is_value_t() )
+            { note_view_in_feed(val); }
             if ( !top.map_setter->set_map_leaf(top.addr, current_key(accum), val, value_kind::string) ) {
                 return state::invalid;
             }
@@ -5514,6 +5715,9 @@ class parser {
                 const auto s = decode_value(accum, val);
                 if ( s != state::ok ) { return s; }
             }
+            if ( top.arr_setter->element_is_string_view()
+                    || top.arr_setter->element_is_value_t() )
+            { note_view_in_feed(val); }
             if ( !top.arr_setter->set_leaf(top.addr, val, value_kind::string) ) { return state::invalid; }
         }
         reset_key();
@@ -5531,6 +5735,7 @@ class parser {
             }
             const auto key_sv = current_key(accum);
             if ( top.map_setter != nullptr ) {
+                if ( top.map_setter->map_key_is_string_view() ) { note_view_in_feed(key_sv); }
                 void *addr = top.map_setter->prepare_map_value(top.addr, key_sv);
                 if ( !addr ) { return state::invalid; }
                 const auto *meta = top.map_setter->get_map_value_metadata();
@@ -5583,6 +5788,7 @@ class parser {
             }
             if ( top.map_setter != nullptr ) {
                 const auto key_sv = current_key(accum);
+                if ( top.map_setter->map_key_is_string_view() ) { note_view_in_feed(key_sv); }
                 void *arr_addr = top.map_setter->prepare_map_value(top.addr, key_sv);
                 if ( !arr_addr ) { return state::invalid; }
                 const auto *arr_root = top.map_setter->get_map_value_array_root_setter();
@@ -5690,8 +5896,21 @@ class parser {
     }
 
     template<bool InSource>
-    state parse_impl(const char *p, const char *const end, std::string *accum, flags fl, char *write_base, const char **next_out = nullptr) {
+    state parse_impl(
+         const char *p
+        ,const char *const end
+        ,std::string *accum
+        ,flags fl
+        ,char *write_base
+        ,const char **next_out = nullptr)
+    {
         if ( m_accumulating && !accum ) { return state::no_buffer; }
+
+        if ( k_track_feed_buffer ) {
+            m_feed_begin = p;
+            m_feed_end = end;
+            m_feed_retained = false;
+        }
 
         if ( m_js == json_state::in_string || m_js == json_state::in_number || m_js == json_state::in_literal )
         { m_seg_start = p; }
@@ -5864,7 +6083,8 @@ class parser {
                                     m_js = json_state::in_escape;
                                     break;
                                 }
-                                if ( !details::decode_escape_into(p, end, dst, m_allow_lone_surrogates, m_allow_invalid_escape) ) { return state::invalid; }
+                                if ( !details::decode_escape_into(p, end, dst, m_allow_lone_surrogates, m_allow_invalid_escape) )
+                                { return state::invalid; }
                                 continue;
                             }
                             if ( !allow_invalid_utf8 ) {
@@ -6121,6 +6341,8 @@ public:
         ,m_skv_lit_src{}
         ,m_skv_lit_i{}
         ,m_skv_lit_n{}
+        ,m_feed_begin{}
+        ,m_feed_end{}
         ,m_stack{}
         ,m_stack_idx{-1}
         ,m_ctx_depth{-1}
@@ -6133,6 +6355,7 @@ public:
         ,m_is_key{}
         ,m_accumulating{}
         ,m_skip_next_value{}
+        ,m_feed_retained{}
         ,m_skv_num{}
         ,m_skv_str_mode{}
         ,m_skv_u4_remain{}
@@ -6159,6 +6382,7 @@ public:
         c.m_st = parse_impl<false>(ptr, end, m_accum, m_flags, nullptr, &next);
         c.m_next = next;
         c.m_remaining = static_cast<std::size_t>(end - next);
+        c.m_buffer_releasable = compute_buffer_releasable(c.m_st);
         return c;
     }
 
@@ -6169,6 +6393,7 @@ public:
         c.m_st = parse_impl<true>(buf, end, nullptr, m_flags, buf, &next);
         c.m_next = next;
         c.m_remaining = static_cast<std::size_t>(end - next);
+        c.m_buffer_releasable = compute_buffer_releasable(c.m_st);
         return c;
     }
 
@@ -6180,6 +6405,7 @@ public:
         cur->m_remaining = static_cast<std::size_t>(end - next);
         cur->m_next = next;
         cur->m_st = st;
+        cur->m_buffer_releasable = compute_buffer_releasable(st);
         return st;
     }
 
@@ -6192,6 +6418,7 @@ public:
         cur->m_remaining = static_cast<std::size_t>(end - next);
         cur->m_next = next;
         cur->m_st = st;
+        cur->m_buffer_releasable = compute_buffer_releasable(st);
         return st;
     }
 };

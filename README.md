@@ -312,7 +312,7 @@ std::cout << l << '\n';
 
 ### State codes
 
-`parse()` and `parse_m()` return a lightweight `jsonrefl::cursor` (see [Sequential records](#sequential-records-parse_next--parse_next_m)); `parse_next()` / `parse_next_m()` return `jsonrefl::state` directly. A `cursor` exposes the result through `cur.status()` and the byte count left through `cur.remaining()` — compare via `cur.status() == jsonrefl::state::ok`. The states are:
+`parse()` and `parse_m()` return a lightweight `jsonrefl::cursor` (see [Sequential records](#sequential-records-parse_next--parse_next_m)); `parse_next()` / `parse_next_m()` return `jsonrefl::state` directly. A `cursor` exposes the result through `cur.status()`, `cur.remaining()`, and `cur.buffer_releasable()` — compare status via `cur.status() == jsonrefl::state::ok`. The states are:
 
 | Value | Meaning |
 |---|---|
@@ -323,6 +323,23 @@ std::cout << l << '\n';
 | `record_end` | A complete document was parsed and more non-whitespace bytes follow it. `cursor::remaining()` reports how many input bytes are left, starting at the next document. Pass the cursor to `parse_next()` / `parse_next_m()` to read the next one. |
 | `no_buffer` | An `accum` scratch buffer was needed (escape decoding or cross-chunk string) but the **`parser`** was constructed **without `accum`** in `make_parser` / ctor. **Never returned by `parse_m()`.** |
 | `sv_cross_chunk` | A `jsonrefl::string_view_t`- or `jsonrefl::value_t`-typed value or key cannot live in the chosen feed shape. From `parse()` chunked: the value/key was split across two chunks (use `std::string`, or feed the whole document at once). From `parse_m()` chunked: contract C2 was violated by the producer. |
+
+#### `cursor::buffer_releasable()`
+
+After `parse()` / `parse_m()` / `parse_next()` / `parse_next_m()`, `buffer_releasable()` is `true` when **that call's** input buffer is no longer referenced by:
+
+1. a pending object/map key still held as a pointer into the buffer (`"key":` seen, value not applied yet), or
+2. any `jsonrefl::string_view_t` / `jsonrefl::value_t` (including `map` keys of those types) assigned from a slice of that buffer.
+
+When `true`, the buffer may be freed or reused for the next `recv()`. Mid-string / mid-number tails for `parse()` are copied into `accum` before return, so they do **not** keep the buffer alive.
+
+Always `false` for `invalid`, `no_buffer`, `sv_cross_chunk`, `unknown_key`.
+
+| Feed shape | `buffer_releasable()` |
+|---|---|
+| `vector<int>` / owning strings, chunk ends between tokens | `true` (with `incomplete` or `ok`) |
+| chunk ends after `"key":`, value in next chunk | `false` |
+| `string_view_t` / `value_t` leaf completed in this chunk | `false` until those fields are overwritten / discarded |
 
 ### Parse flags
 

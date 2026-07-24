@@ -355,6 +355,51 @@ bool test_calc_max_stack_depth() {
     return true;
 }
 
+bool test_feed_buffer_traits() {
+    static_assert(!jsonrefl::may_retain_feed_views<std::vector<int>>::value, "vector<int> retain");
+    static_assert(!jsonrefl::may_have_object_keys<std::vector<int>>::value, "vector<int> keys");
+
+    static_assert(!jsonrefl::may_retain_feed_views<int_string>::value, "int_string retain");
+    static_assert(jsonrefl::may_have_object_keys<int_string>::value, "int_string keys");
+
+    static_assert(jsonrefl::may_retain_feed_views<sv_array>::value, "sv_array retain");
+    static_assert(jsonrefl::may_have_object_keys<sv_array>::value, "sv_array keys");
+
+    static_assert(jsonrefl::may_retain_feed_views<value_fields>::value, "value_fields retain");
+    static_assert(jsonrefl::may_have_object_keys<value_fields>::value, "value_fields keys");
+
+    static_assert(jsonrefl::may_retain_feed_views<nested>::value, "nested retain");
+    static_assert(jsonrefl::may_have_object_keys<nested>::value, "nested keys");
+
+    static_assert(
+        !jsonrefl::may_retain_feed_views<std::map<std::string, int>>::value
+        ,"map<string,int> retain"
+    );
+    static_assert(
+        jsonrefl::may_have_object_keys<std::map<std::string, int>>::value
+        ,"map<string,int> keys"
+    );
+    static_assert(
+        jsonrefl::may_retain_feed_views<std::map<jsonrefl::string_view_t, int>>::value
+        ,"map<sv,int> retain"
+    );
+    static_assert(
+        jsonrefl::may_have_object_keys<std::map<jsonrefl::string_view_t, int>>::value
+        ,"map<sv,int> keys"
+    );
+
+    static_assert(
+        jsonrefl::may_have_object_keys<std::vector<int_string>>::value
+        ,"vector<int_string> keys"
+    );
+    static_assert(
+        !jsonrefl::may_retain_feed_views<std::vector<int_string>>::value
+        ,"vector<int_string> retain"
+    );
+
+    return true;
+}
+
 bool test_dump() {
     constexpr auto &meta = jsonrefl::metadata<myns::response_t>();
     std::ostringstream oss;
@@ -2864,6 +2909,459 @@ bool test_value_t_roundtrip() {
     return true;
 }
 
+bool test_buffer_releasable_array_int_chunked() {
+    std::vector<int> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char a[] = "[1,2,";
+    auto c0 = p.parse(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == true);
+
+    static const char b[] = "3,4]";
+    auto c1 = p.parse(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+    CHECK((obj == std::vector<int>{1, 2, 3, 4}));
+
+    return true;
+}
+
+bool test_buffer_releasable_array_int_singleshot() {
+    std::vector<int> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = "[10,20,30]";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == true);
+
+    return true;
+}
+
+bool test_buffer_releasable_empty_array() {
+    std::vector<int> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = "[]";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == true);
+
+    return true;
+}
+
+bool test_buffer_releasable_pending_key() {
+    int_string obj{};
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+    static const char a[] = R"({"i":1,"s":)";
+    auto c0 = p.parse(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == false);
+
+    static const char b[] = R"("hi"})";
+    auto c1 = p.parse(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+    CHECK_EQ(obj.i, 1);
+    CHECK_EQ(obj.s, std::string("hi"));
+
+    return true;
+}
+
+bool test_buffer_releasable_pending_key_before_colon() {
+    int_string obj{};
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+    // key closed, colon not yet seen
+    static const char a[] = R"({"i")";
+    auto c0 = p.parse(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == false);
+
+    static const char b[] = R"(:1,"s":"z"})";
+    auto c1 = p.parse(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+
+    return true;
+}
+
+bool test_buffer_releasable_owning_struct_singleshot() {
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"({"i":7,"s":"ok"})";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == true);
+    CHECK_EQ(obj.i, 7);
+    CHECK_EQ(obj.s, std::string("ok"));
+
+    return true;
+}
+
+bool test_buffer_releasable_string_view_retains() {
+    std::vector<jsonrefl::string_view_t> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"(["ab","cd"])";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == false);
+    CHECK_EQ(obj.size(), 2u);
+    CHECK(obj[0].data() >= js && obj[0].data() < js + sizeof(js));
+
+    return true;
+}
+
+bool test_buffer_releasable_value_t_retains() {
+    value_fields obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"({"n":42,"s":"x","b":true,"z":null})";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == false);
+    CHECK(obj.n.kind() == jsonrefl::value_kind::integer);
+
+    return true;
+}
+
+bool test_buffer_releasable_value_t_bool_only_uses_static_lit() {
+    // boolean/null literals are applied from static m_lit_str, not the feed —
+    // so a value_t-only bool/null document does not retain the feed buffer.
+    std::map<std::string, jsonrefl::value_t> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"({"b":true,"z":null})";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == true);
+    CHECK(obj.at("b").kind() == jsonrefl::value_kind::boolean);
+    CHECK(obj.at("z").kind() == jsonrefl::value_kind::null);
+
+    return true;
+}
+
+bool test_buffer_releasable_mid_string_with_accum() {
+    std::vector<std::string> obj;
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+    static const char a[] = R"(["hel)";
+    auto c0 = p.parse(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == true);
+
+    static const char b[] = R"(lo"])";
+    auto c1 = p.parse(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+    CHECK_EQ(obj.size(), 1u);
+    CHECK_EQ(obj[0], std::string("hello"));
+
+    return true;
+}
+
+bool test_buffer_releasable_mid_number_with_accum() {
+    std::vector<int> obj;
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+    static const char a[] = "[12";
+    auto c0 = p.parse(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == true);
+
+    static const char b[] = "34]";
+    auto c1 = p.parse(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+    CHECK((obj == std::vector<int>{1234}));
+
+    return true;
+}
+
+bool test_buffer_releasable_mid_number_no_accum_false() {
+    std::vector<int> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char a[] = "[12";
+    auto c = p.parse(a, sizeof(a) - 1);
+    CHECK(c.status() == jsonrefl::state::no_buffer);
+    CHECK(c.buffer_releasable() == false);
+
+    return true;
+}
+
+bool test_buffer_releasable_parse_m_owning_ok() {
+    char buf[] = R"({"i":3,"s":"x"})";
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    auto c = p.parse_m(buf, sizeof(buf) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == true);
+
+    return true;
+}
+
+bool test_buffer_releasable_parse_m_string_view_retains() {
+    char buf[] = R"(["ab","cd"])";
+    std::vector<jsonrefl::string_view_t> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    auto c = p.parse_m(buf, sizeof(buf) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == false);
+    CHECK(obj[0].data() >= buf && obj[0].data() < buf + sizeof(buf));
+
+    return true;
+}
+
+bool test_buffer_releasable_parse_m_sv_cross_chunk_false() {
+    char buf1[] = R"({"s":"hel)";
+    kv_ss obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    auto c = p.parse_m(buf1, sizeof(buf1) - 1);
+    CHECK(c.status() == jsonrefl::state::sv_cross_chunk);
+    CHECK(c.buffer_releasable() == false);
+
+    return true;
+}
+
+bool test_buffer_releasable_parse_m_pending_key() {
+    char a[] = R"({"i":1,"s":)";
+    char b[] = R"("hi"})";
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    auto c0 = p.parse_m(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == false);
+
+    auto c1 = p.parse_m(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+
+    return true;
+}
+
+bool test_buffer_releasable_map_sv_key_retains() {
+    std::map<jsonrefl::string_view_t, int> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"({"aa":1,"bb":2})";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == false);
+    CHECK_EQ(obj.size(), 2u);
+
+    return true;
+}
+
+bool test_buffer_releasable_map_owning_pending_key() {
+    std::map<std::string, int> obj;
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+    static const char a[] = R"({"k":)";
+    auto c0 = p.parse(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == false);
+
+    static const char b[] = "42}";
+    auto c1 = p.parse(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+    CHECK_EQ(obj.at("k"), 42);
+
+    return true;
+}
+
+bool test_buffer_releasable_record_end_owning() {
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"({"i":1,"s":"a"}{"i":2,"s":"b"})";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::record_end);
+    // first record used owning fields only — feed still holds the second record bytes,
+    // but no view into the first record; releasable refers to this whole feed buffer.
+    // Views were not taken; pending key cleared — releasable true for owning parse.
+    CHECK(c.buffer_releasable() == true);
+    CHECK_EQ(obj.i, 1);
+
+    return true;
+}
+
+bool test_buffer_releasable_parse_next_updates_flag() {
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"({"i":1,"s":"a"}{"i":2,"s":"b"})";
+    auto cur = p.parse(js, sizeof(js) - 1);
+    CHECK(cur.status() == jsonrefl::state::record_end);
+    CHECK(cur.buffer_releasable() == true);
+
+    obj = {};
+    const auto st = p.parse_next(&cur);
+    CHECK(st == jsonrefl::state::ok);
+    CHECK(cur.buffer_releasable() == true);
+    CHECK_EQ(obj.i, 2);
+    CHECK_EQ(obj.s, std::string("b"));
+
+    return true;
+}
+
+bool test_buffer_releasable_invalid_false() {
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    static const char bad[] = "{]";
+    auto c = p.parse(bad, sizeof(bad) - 1);
+    CHECK(c.status() == jsonrefl::state::invalid);
+    CHECK(c.buffer_releasable() == false);
+
+    return true;
+}
+
+bool test_buffer_releasable_unknown_key_false() {
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"({"i":1,"ghost":0,"s":"x"})";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::unknown_key);
+    CHECK(c.buffer_releasable() == false);
+
+    return true;
+}
+
+bool test_buffer_releasable_sv_cross_chunk_parse_false() {
+    // Without accum, mid-string for string_view → no_buffer (cannot flush).
+    {
+        std::vector<jsonrefl::string_view_t> obj;
+        auto p = jsonrefl::make_parser(&obj);
+        static const char a[] = R"(["hel)";
+        auto c = p.parse(a, sizeof(a) - 1);
+        CHECK(c.status() == jsonrefl::state::no_buffer);
+        CHECK(c.buffer_releasable() == false);
+    }
+    // With accum, mid-string for string_view → sv_cross_chunk.
+    {
+        std::vector<jsonrefl::string_view_t> obj;
+        std::string accum;
+        auto p = jsonrefl::make_parser(&obj, &accum);
+        static const char a[] = R"(["hel)";
+        auto c = p.parse(a, sizeof(a) - 1);
+        CHECK(c.status() == jsonrefl::state::sv_cross_chunk);
+        CHECK(c.buffer_releasable() == false);
+    }
+
+    return true;
+}
+
+bool test_buffer_releasable_free_first_chunk_then_continue() {
+    // Integration: after releasable incomplete, drop the first buffer and keep going.
+    std::vector<int> obj;
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+
+    {
+        std::string chunk = "[1,2,";
+        auto c = p.parse(chunk.data(), chunk.size());
+        CHECK(c.status() == jsonrefl::state::incomplete);
+        CHECK(c.buffer_releasable() == true);
+    } // chunk destroyed
+
+    {
+        std::string chunk = "3]";
+        auto c = p.parse(chunk.data(), chunk.size());
+        CHECK(c.status() == jsonrefl::state::ok);
+        CHECK(c.buffer_releasable() == true);
+    }
+    CHECK((obj == std::vector<int>{1, 2, 3}));
+
+    return true;
+}
+
+bool test_buffer_releasable_must_keep_key_chunk() {
+    // Integration: freeing the pending-key chunk would be wrong — flag stays false.
+    int_string obj{};
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+
+    std::string key_chunk = R"({"i":9,"s":)";
+    auto c0 = p.parse(key_chunk.data(), key_chunk.size());
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == false);
+    // keep key_chunk alive until value arrives
+    static const char val_chunk[] = R"("zz"})";
+    auto c1 = p.parse(val_chunk, sizeof(val_chunk) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+    CHECK_EQ(obj.s, std::string("zz"));
+
+    return true;
+}
+
+JSONREFL_STRUCT(owning_nest, (int, outer), (int_string, inner));
+
+bool test_buffer_releasable_nested_object_pending_key() {
+    owning_nest obj{};
+    std::string accum;
+    auto p = jsonrefl::make_parser(&obj, &accum);
+
+    // pending key "s" inside nested object `inner`
+    static const char a[] = R"({"outer":1,"inner":{"i":2,"s":)";
+    auto c0 = p.parse(a, sizeof(a) - 1);
+    CHECK(c0.status() == jsonrefl::state::incomplete);
+    CHECK(c0.buffer_releasable() == false);
+
+    static const char b[] = R"("hi"}})";
+    auto c1 = p.parse(b, sizeof(b) - 1);
+    CHECK(c1.status() == jsonrefl::state::ok);
+    CHECK(c1.buffer_releasable() == true);
+    CHECK_EQ(obj.outer, 1);
+    CHECK_EQ(obj.inner.i, 2);
+    CHECK_EQ(obj.inner.s, std::string("hi"));
+
+    return true;
+}
+
+bool test_buffer_releasable_parse_next_m_updates_flag() {
+    std::string buf = R"({"i":1,"s":"a"}{"i":2,"s":"b"})";
+    int_string obj{};
+    auto p = jsonrefl::make_parser(&obj);
+
+    auto cur = p.parse_m(&buf[0], buf.size());
+    CHECK(cur.status() == jsonrefl::state::record_end);
+    CHECK(cur.buffer_releasable() == true);
+    CHECK_EQ(obj.i, 1);
+    CHECK_EQ(obj.s, std::string("a"));
+
+    obj = {};
+    const auto st = p.parse_next_m(&cur);
+    CHECK(st == jsonrefl::state::ok);
+    CHECK(cur.buffer_releasable() == true);
+    CHECK_EQ(obj.i, 2);
+    CHECK_EQ(obj.s, std::string("b"));
+
+    return true;
+}
+
+bool test_buffer_releasable_empty_string_view_retains() {
+    std::vector<jsonrefl::string_view_t> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"([""])";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == false);
+    CHECK_EQ(obj.size(), 1u);
+    CHECK_EQ(obj[0].size(), 0u);
+    CHECK(obj[0].data() != nullptr);
+    CHECK(obj[0].data() >= js && obj[0].data() < js + sizeof(js));
+
+    return true;
+}
+
+bool test_buffer_releasable_empty_owning_string_ok() {
+    std::vector<std::string> obj;
+    auto p = jsonrefl::make_parser(&obj);
+    static const char js[] = R"([""])";
+    auto c = p.parse(js, sizeof(js) - 1);
+    CHECK(c.status() == jsonrefl::state::ok);
+    CHECK(c.buffer_releasable() == true);
+    CHECK_EQ(obj.size(), 1u);
+    CHECK(obj[0].empty());
+
+    return true;
+}
+
 /***************************************************************************************************/
 
 JSONREFL_STRUCT(float_fields, (double, d), (float, f));
@@ -4060,6 +4558,7 @@ int main() {
         && JSONREFL_TEST(test_metadata_rate_limits_t)
         && JSONREFL_TEST(test_metadata_response_t)
         && JSONREFL_TEST(test_calc_max_stack_depth)
+        && JSONREFL_TEST(test_feed_buffer_traits)
         && JSONREFL_TEST(test_dump)
         && JSONREFL_TEST(test_phf_next_pow2_is_power_of_two)
         && JSONREFL_TEST(test_phf_fnv1a_distinct_for_distinct_keys)
@@ -4156,6 +4655,35 @@ int main() {
         && JSONREFL_TEST(test_value_t_parse_and_convert)
         && JSONREFL_TEST(test_value_t_parse_m_zero_copy)
         && JSONREFL_TEST(test_value_t_roundtrip)
+        && JSONREFL_TEST(test_buffer_releasable_array_int_chunked)
+        && JSONREFL_TEST(test_buffer_releasable_array_int_singleshot)
+        && JSONREFL_TEST(test_buffer_releasable_empty_array)
+        && JSONREFL_TEST(test_buffer_releasable_pending_key)
+        && JSONREFL_TEST(test_buffer_releasable_pending_key_before_colon)
+        && JSONREFL_TEST(test_buffer_releasable_owning_struct_singleshot)
+        && JSONREFL_TEST(test_buffer_releasable_string_view_retains)
+        && JSONREFL_TEST(test_buffer_releasable_value_t_retains)
+        && JSONREFL_TEST(test_buffer_releasable_value_t_bool_only_uses_static_lit)
+        && JSONREFL_TEST(test_buffer_releasable_mid_string_with_accum)
+        && JSONREFL_TEST(test_buffer_releasable_mid_number_with_accum)
+        && JSONREFL_TEST(test_buffer_releasable_mid_number_no_accum_false)
+        && JSONREFL_TEST(test_buffer_releasable_parse_m_owning_ok)
+        && JSONREFL_TEST(test_buffer_releasable_parse_m_string_view_retains)
+        && JSONREFL_TEST(test_buffer_releasable_parse_m_sv_cross_chunk_false)
+        && JSONREFL_TEST(test_buffer_releasable_parse_m_pending_key)
+        && JSONREFL_TEST(test_buffer_releasable_map_sv_key_retains)
+        && JSONREFL_TEST(test_buffer_releasable_map_owning_pending_key)
+        && JSONREFL_TEST(test_buffer_releasable_record_end_owning)
+        && JSONREFL_TEST(test_buffer_releasable_parse_next_updates_flag)
+        && JSONREFL_TEST(test_buffer_releasable_invalid_false)
+        && JSONREFL_TEST(test_buffer_releasable_unknown_key_false)
+        && JSONREFL_TEST(test_buffer_releasable_sv_cross_chunk_parse_false)
+        && JSONREFL_TEST(test_buffer_releasable_free_first_chunk_then_continue)
+        && JSONREFL_TEST(test_buffer_releasable_must_keep_key_chunk)
+        && JSONREFL_TEST(test_buffer_releasable_nested_object_pending_key)
+        && JSONREFL_TEST(test_buffer_releasable_parse_next_m_updates_flag)
+        && JSONREFL_TEST(test_buffer_releasable_empty_string_view_retains)
+        && JSONREFL_TEST(test_buffer_releasable_empty_owning_string_ok)
         && JSONREFL_TEST(test_parse_m_escape_no_accum_ok)
         && JSONREFL_TEST(test_parse_m_escape_in_map)
         && JSONREFL_TEST(test_root_vector_struct_singleshot)
