@@ -11,7 +11,7 @@ option(ENABLE_ASAN "Enable AddressSanitizer")
 option(ENABLE_UBSAN "Enable UndefinedBehaviourSanitizer")
 
 if( MSVC )
-    add_compile_options(/W4 /permissive-)
+    add_compile_options(/W4 /permissive- /bigobj)
     if( NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
         add_compile_options(/Zc:preprocessor)
     endif()
