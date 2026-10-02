@@ -312,11 +312,7 @@ public:
     value_kind kind() const noexcept { return m_kind; }
 
     string_view_t to_string_view() const noexcept { return m_sv; }
-    optional_t<std::string> to_string() const {
-        if ( m_kind == value_kind::null && m_sv.empty() ) { return optional_t<std::string>{}; }
-
-        return optional_t<std::string>{std::string(m_sv.data(), m_sv.size())};
-    }
+    std::string to_string() const { return std::string{m_sv.begin(), m_sv.end()}; }
 
     optional_t<bool> to_bool() const noexcept {
         if ( m_kind != value_kind::boolean ) { return optional_t<bool>{}; }

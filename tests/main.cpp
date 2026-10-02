@@ -2789,13 +2789,17 @@ bool test_value_t_to_conversions() {
 
     jsonrefl::value_t sv;
     sv.assign("hello", jsonrefl::value_kind::string);
-    const auto hello = sv.to_string();
-    CHECK(hello);
-    CHECK_EQ(*hello, std::string("hello"));
+    CHECK_EQ(sv.to_string(), std::string("hello"));
+    CHECK(sv.to_string_view() == jsonrefl::string_view_t("hello"));
+
+    CHECK_EQ(iv.to_string(), std::string("42"));
+    CHECK_EQ(bool_v.to_string(), std::string("true"));
+    CHECK_EQ(fv.to_string(), std::string("3.14"));
 
     jsonrefl::value_t empty;
     CHECK(empty.kind() == jsonrefl::value_kind::null);
-    CHECK(!empty.to_string());
+    CHECK(empty.to_string().empty());
+    CHECK(empty.to_string_view().empty());
 
     return true;
 }
@@ -2853,9 +2857,7 @@ bool test_value_t_parse_and_convert() {
     const auto n_parsed = obj.n.to_int32();
     CHECK(n_parsed);
     CHECK_EQ(*n_parsed, 42);
-    const auto s_str = obj.s.to_string();
-    CHECK(s_str);
-    CHECK_EQ(*s_str, std::string("hi"));
+    CHECK_EQ(obj.s.to_string(), std::string("hi"));
     const auto b_parsed = obj.b.to_bool();
     CHECK(b_parsed);
     CHECK_EQ(*b_parsed, true);
@@ -2875,9 +2877,7 @@ bool test_value_t_parse_m_zero_copy() {
     const auto n_parsed = obj.n.to_int32();
     CHECK(n_parsed);
     CHECK_EQ(*n_parsed, 99);
-    const auto s_str = obj.s.to_string();
-    CHECK(s_str);
-    CHECK_EQ(*s_str, std::string("abc"));
+    CHECK_EQ(obj.s.to_string(), std::string("abc"));
 
     return true;
 }
@@ -2898,9 +2898,7 @@ bool test_value_t_roundtrip() {
     const auto n_parsed = out.n.to_int32();
     CHECK(n_parsed);
     CHECK_EQ(*n_parsed, 7);
-    const auto s_str = out.s.to_string();
-    CHECK(s_str);
-    CHECK_EQ(*s_str, std::string("x\"y"));
+    CHECK_EQ(out.s.to_string(), std::string("x\"y"));
     const auto b_parsed = out.b.to_bool();
     CHECK(b_parsed);
     CHECK_EQ(*b_parsed, false);
