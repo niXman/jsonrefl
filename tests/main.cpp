@@ -2766,6 +2766,24 @@ bool test_value_t_to_conversions() {
     ubad.assign("256", jsonrefl::value_kind::integer);
     CHECK(!ubad.to_uint8());
 
+    jsonrefl::value_t sz;
+    sz.assign("42", jsonrefl::value_kind::integer);
+    const auto sz_parsed = sz.to_size_t();
+    CHECK(sz_parsed);
+    CHECK_EQ(*sz_parsed, static_cast<std::size_t>(42));
+
+    jsonrefl::value_t sz_big;
+    sz_big.assign("18446744073709551616", jsonrefl::value_kind::integer);
+    CHECK(!sz_big.to_size_t());
+
+    jsonrefl::value_t sz_neg;
+    sz_neg.assign("-1", jsonrefl::value_kind::integer);
+    CHECK(!sz_neg.to_size_t());
+
+    jsonrefl::value_t sz_float;
+    sz_float.assign("1.5", jsonrefl::value_kind::floating);
+    CHECK(!sz_float.to_size_t());
+
     jsonrefl::value_t trail;
     trail.assign("42 ", jsonrefl::value_kind::integer);
     CHECK(!trail.to_int32());

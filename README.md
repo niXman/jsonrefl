@@ -137,7 +137,7 @@ Use `value_t` as a **leaf** type — struct field, container element, or map **v
 
 | `value_kind` | `to_*()` / `to<T>()` |
 |---|---|
-| `integer` | `to_int8()` … `to_uint64()`, integral / enum `to<T>()` |
+| `integer` | `to_int8()` … `to_uint64()`, `to_size_t()`, integral / enum `to<T>()` |
 | `floating` | `to_float()`, `to_double()`, floating `to<T>()` |
 | `boolean` | `to_bool()`, `to<bool>()` |
 | `string` | (no typed converter; use `to_string()` / `to_string_view()`) |

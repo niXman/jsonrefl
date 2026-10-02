@@ -374,6 +374,12 @@ public:
         return details::parse_integral_sv<std::uint64_t>(m_sv);
     }
 
+    optional_t<std::size_t> to_size_t() const noexcept {
+        if ( m_kind != value_kind::integer ) { return optional_t<std::size_t>{}; }
+
+        return details::parse_integral_sv<std::size_t>(m_sv);
+    }
+
     optional_t<float> to_float() const noexcept {
         if ( m_kind != value_kind::floating ) { return optional_t<float>{}; }
 
