@@ -331,7 +331,7 @@ After `parse()` / `parse_m()` / `parse_next()` / `parse_next_m()`, `buffer_relea
 1. a pending object/map key still held as a pointer into the buffer (`"key":` seen, value not applied yet), or
 2. any `jsonrefl::string_view_t` / `jsonrefl::value_t` (including `map` keys of those types) assigned from a slice of that buffer.
 
-When `true`, the buffer may be freed or reused for the next `recv()`. Mid-string / mid-number tails for `parse()` are copied into `accum` before return, so they do **not** keep the buffer alive.
+`true` means the parser and any zero-copy fields do not hold this buffer. The cursor still points at the unread tail when `remaining() > 0` (`record_end`): keep the buffer until `parse_next` / `parse_next_m` consumes that tail. Free or reuse it for the next `recv()` only when `buffer_releasable()` is `true` **and** `remaining() == 0`. Mid-string / mid-number tails for `parse()` are copied into `accum` before return, so they do **not** keep the buffer alive.
 
 Always `false` for `invalid`, `no_buffer`, `sv_cross_chunk`, `unknown_key`.
 
