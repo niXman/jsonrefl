@@ -183,6 +183,7 @@ from_chars_i(const char *first, const char *last, T &value, int base) noexcept {
     errno = 0;
     char *endp = nullptr;
     if ( std::is_unsigned<T>::value ) {
+        if ( buf[0] == '-' ) { return res; }
         unsigned long long u = ::strtoull(buf, &endp, base);
         if ( endp == buf ) { return res; }
         if ( errno == ERANGE || u > std::numeric_limits<T>::max() ) {
