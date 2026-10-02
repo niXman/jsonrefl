@@ -121,6 +121,8 @@ Prefer **`jsonrefl::string_view_t`** and **`jsonrefl::optional_t<T>`** together 
 
 `value_t` stores a **non-owning** slice of the input token plus a `value_kind` tag (`null`, `string`, `integer`, `floating`, `boolean`). On parse, numeric and boolean leaves are kept as **lexical text** — the library does not call `from_chars` / similar until you invoke `to_int32()`, `to_double()`, `to_bool()`, `to<T>()`, …
 
+The type and every `to_*()` live in `jsonrefl/value.hpp`. A struct header can include that instead of `jsonrefl.hpp`. Parsing and `JSONREFL_METADATA` still need the full header, in the `.cpp` that parses.
+
 The parser classifies numbers lexically: tokens containing `.`, `e`, or `E` (including `NaN` / `Infinity` when `flags::allow_infinity_and_nan` is set) become `value_kind::floating`; all other numeric tokens become `value_kind::integer`.
 
 That defers typed conversion to when (and whether) you need it, which speeds up parsing when many numeric fields are present but only some are consumed, and preserves the exact JSON spelling of numbers and booleans for round-trip serialization.
