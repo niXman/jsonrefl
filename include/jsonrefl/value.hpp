@@ -314,6 +314,12 @@ public:
     string_view_t to_string_view() const noexcept { return m_sv; }
     std::string to_string() const { return std::string{m_sv.begin(), m_sv.end()}; }
 
+    bool operator==(const value_t &rhs) const noexcept
+    { return m_kind == rhs.m_kind && m_sv == rhs.m_sv; }
+
+    bool operator!=(const value_t &rhs) const noexcept
+    { return !(*this == rhs); }
+
     optional_t<bool> to_bool() const noexcept {
         if ( m_kind != value_kind::boolean ) { return optional_t<bool>{}; }
 

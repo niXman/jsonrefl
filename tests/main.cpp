@@ -2804,6 +2804,35 @@ bool test_value_t_to_conversions() {
     return true;
 }
 
+bool test_value_t_equality() {
+    jsonrefl::value_t a;
+    jsonrefl::value_t b;
+    a.assign("42", jsonrefl::value_kind::integer);
+    b.assign("42", jsonrefl::value_kind::integer);
+    CHECK(a == b);
+    CHECK(!(a != b));
+
+    jsonrefl::value_t other_text;
+    other_text.assign("43", jsonrefl::value_kind::integer);
+    CHECK(a != other_text);
+    CHECK(!(a == other_text));
+
+    jsonrefl::value_t as_string;
+    as_string.assign("42", jsonrefl::value_kind::string);
+    CHECK(a != as_string);
+
+    jsonrefl::value_t null_a;
+    jsonrefl::value_t null_b;
+    CHECK(null_a.kind() == jsonrefl::value_kind::null);
+    CHECK(null_a == null_b);
+
+    jsonrefl::value_t empty_string;
+    empty_string.assign("", jsonrefl::value_kind::string);
+    CHECK(null_a != empty_string);
+
+    return true;
+}
+
 bool test_value_t_integer_floating_kinds() {
     std::map<std::string, jsonrefl::value_t> obj;
     const jsonrefl::string_view_t js = R"({"i":-42,"z":0,"f":3.14,"e":1e5})";
@@ -4648,6 +4677,7 @@ int main() {
         && JSONREFL_TEST(test_in_source_invalid_escape)
         && JSONREFL_TEST(test_in_source_sv_cross_chunk_string)
         && JSONREFL_TEST(test_value_t_to_conversions)
+        && JSONREFL_TEST(test_value_t_equality)
         && JSONREFL_TEST(test_value_t_integer_floating_kinds)
         && JSONREFL_TEST(test_value_t_nonstandard_float_kind)
         && JSONREFL_TEST(test_value_t_parse_and_convert)
