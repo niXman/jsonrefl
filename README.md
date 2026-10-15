@@ -131,7 +131,14 @@ That defers typed conversion to when (and whether) you need it, which speeds up 
 
 Use `value_t` as a **leaf** type — struct field, container element, or map **value**. It is not a dynamic JSON document type; for heterogeneous objects use e.g. `std::map<std::string, jsonrefl::value_t>` or a struct with several `value_t` members.
 
-**Lifetime and feed constraints** are the same as for [`jsonrefl::string_view_t`](#jsonreflstring_view_t-and-jsonrefloptionalt-portable-aliases): the slice points into the input buffer, or into **`accum`** when `parse()` decoded escapes. That storage must outlive the `value_t`. Chunked `parse()` can return `state::sv_cross_chunk`; chunked `parse_m()` requires contracts **C1** + **C2**; copy or consume before the next `parse_next()` when slices may refer to `accum` or an earlier chunk.
+**Lifetime.** Where the slice points depends on the leaf:
+
+- A string or number that lies entirely in the current buffer points into that buffer.
+- `parse()` copies a string with escapes into `accum`, and the slice points there. A number split across chunks is copied into `accum` as well.
+- `true`, `false`, `NaN`, `Infinity`, and `-Infinity` point at static literals inside the parser. `null` and `unspecified` are an empty slice.
+- A string split across chunks is not stored: `parse()` returns `state::sv_cross_chunk`. `parse_m()` decodes escapes in place in the caller's buffer and requires contracts **C1** + **C2**.
+
+The storage the slice points at must outlive the `value_t`. `parse_next` / `parse_next_m` clear `accum`, so copy a slice that points there before the next record.
 
 **Lexeme:** `to_string_view()` returns the stored slice for every kind. `to_string()` returns the same bytes as a `std::string`. A number, `true`/`false`, or a string leaf can be written to a stream without parsing it into `int` or `bool`. `null` and `unspecified` are stored as an empty slice, so both return empty. Tell them apart with `kind()`.
 
