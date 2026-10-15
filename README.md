@@ -119,7 +119,9 @@ Prefer **`jsonrefl::string_view_t`** and **`jsonrefl::optional_t<T>`** together 
 
 ### `jsonrefl::value_t` (non-owning JSON leaf)
 
-`value_t` stores a **non-owning** slice of the input token plus a `value_kind` tag (`null`, `string`, `integer`, `floating`, `boolean`). On parse, numeric and boolean leaves are kept as **lexical text** — the library does not call `from_chars` / similar until you invoke `to_int32()`, `to_double()`, `to_bool()`, `to<T>()`, …
+`value_t` stores a **non-owning** slice of the input token plus a `value_kind` tag (`null`, `string`, `integer`, `floating`, `boolean`, `unspecified`). On parse, numeric and boolean leaves are kept as **lexical text** — the library does not call `from_chars` / similar until you invoke `to_int32()`, `to_double()`, `to_bool()`, `to<T>()`, …
+
+A default-constructed `value_t` is `value_kind::unspecified`. The parser never assigns that kind: a missing key leaves the field as it was, and a JSON `null` becomes `value_kind::null`. Serialization writes `unspecified` as `null`.
 
 The type and every `to_*()` live in `jsonrefl/value.hpp`. A struct header can include that instead of `jsonrefl.hpp`. Parsing and `JSONREFL_METADATA` still need the full header, in the `.cpp` that parses.
 
@@ -131,7 +133,7 @@ Use `value_t` as a **leaf** type — struct field, container element, or map **v
 
 **Lifetime and feed constraints** are the same as for [`jsonrefl::string_view_t`](#jsonreflstring_view_t-and-jsonrefloptionalt-portable-aliases): the slice points into the input buffer, or into **`accum`** when `parse()` decoded escapes. That storage must outlive the `value_t`. Chunked `parse()` can return `state::sv_cross_chunk`; chunked `parse_m()` requires contracts **C1** + **C2**; copy or consume before the next `parse_next()` when slices may refer to `accum` or an earlier chunk.
 
-**Lexeme:** `to_string_view()` returns the stored slice for every kind. `to_string()` returns the same bytes as a `std::string`. A number, `true`/`false`, or a string leaf can be written to a stream without parsing it into `int` or `bool`. `null` is stored as an empty slice, so both return empty.
+**Lexeme:** `to_string_view()` returns the stored slice for every kind. `to_string()` returns the same bytes as a `std::string`. A number, `true`/`false`, or a string leaf can be written to a stream without parsing it into `int` or `bool`. `null` and `unspecified` are stored as an empty slice, so both return empty. Tell them apart with `kind()`.
 
 **Conversion:** the other `to_*()` / `to<T>()` return an empty `optional_t` on failure (overflow, trailing junk, or **wrong `value_kind`**). Each accepts only the matching kind:
 
@@ -142,6 +144,7 @@ Use `value_t` as a **leaf** type — struct field, container element, or map **v
 | `boolean` | `to_bool()`, `to<bool>()` |
 | `string` | (no typed converter; use `to_string()` / `to_string_view()`) |
 | `null` | the converters above fail (empty optional) |
+| `unspecified` | the converters above fail (empty optional) |
 
 Calling `to_int32()` on a `floating` leaf (or `to_double()` on an `integer` leaf) returns an empty optional even if the lexeme would parse as a number.
 

@@ -1013,6 +1013,7 @@ std::size_t required_bytes(const U &v, serialize_flags fl, std::size_t indent) n
 inline std::size_t required_bytes_value_t(const value_t &v) noexcept {
     switch ( v.kind() ) {
         case value_kind::null:
+        case value_kind::unspecified:
             return 4u;
 
         case value_kind::string: {
@@ -1035,7 +1036,8 @@ inline std::size_t required_bytes_value_t(const value_t &v) noexcept {
 
 inline char* write_value_t_json(char *ptr, const value_t &v) noexcept {
     switch ( v.kind() ) {
-        case value_kind::null: {
+        case value_kind::null:
+        case value_kind::unspecified: {
             std::memcpy(ptr, "null", 4);
 
             return ptr + 4;
@@ -1726,6 +1728,7 @@ inline bool stream_value_t_json(
 ) noexcept {
     switch ( v.kind() ) {
         case value_kind::null:
+        case value_kind::unspecified:
             return w.write_token("null", 4, tail, tail_len);
 
         case value_kind::integer:
@@ -2552,7 +2555,9 @@ class setter_t final: public setter_base {
         auto &m = ensure_ref(static_cast<C *>(obj)->*m_ptr);
         typename I::key_type k{};
         set_impl(k, key);
-        details::map_insert_or_assign(m, std::move(k), jsonrefl::value_t{});
+        jsonrefl::value_t null_leaf;
+        null_leaf.assign({}, value_kind::null);
+        details::map_insert_or_assign(m, std::move(k), std::move(null_leaf));
     }
 
     template<typename I>
@@ -3317,7 +3322,9 @@ class root_setter_t final: public setter_base {
         auto &m = *static_cast<I*>(obj);
         typename I::key_type k{};
         conv(k, key);
-        m.emplace(std::move(k), jsonrefl::value_t{});
+        jsonrefl::value_t null_leaf;
+        null_leaf.assign({}, value_kind::null);
+        m.emplace(std::move(k), std::move(null_leaf));
     }
 
     template<typename I>

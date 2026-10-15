@@ -3016,9 +3016,11 @@ bool test_value_t_to_conversions() {
     CHECK_EQ(fv.to_string(), std::string("3.14"));
 
     jsonrefl::value_t empty;
-    CHECK(empty.kind() == jsonrefl::value_kind::null);
+    CHECK(empty.kind() == jsonrefl::value_kind::unspecified);
     CHECK(empty.to_string().empty());
     CHECK(empty.to_string_view().empty());
+    CHECK(!empty.to_int32());
+    CHECK(!empty.to_bool());
 
     return true;
 }
@@ -3042,12 +3044,72 @@ bool test_value_t_equality() {
 
     jsonrefl::value_t null_a;
     jsonrefl::value_t null_b;
-    CHECK(null_a.kind() == jsonrefl::value_kind::null);
+    CHECK(null_a.kind() == jsonrefl::value_kind::unspecified);
     CHECK(null_a == null_b);
+
+    jsonrefl::value_t json_null;
+    json_null.assign({}, jsonrefl::value_kind::null);
+    CHECK(json_null.kind() == jsonrefl::value_kind::null);
+    CHECK(null_a != json_null);
 
     jsonrefl::value_t empty_string;
     empty_string.assign("", jsonrefl::value_kind::string);
     CHECK(null_a != empty_string);
+    CHECK(json_null != empty_string);
+
+    return true;
+}
+
+bool test_value_t_unspecified_distinct_from_null_and_empty_string() {
+    jsonrefl::value_t fresh;
+    CHECK(fresh.kind() == jsonrefl::value_kind::unspecified);
+    CHECK(fresh.empty());
+    CHECK(fresh.to_string().empty());
+    CHECK(!fresh.to_int32());
+    CHECK(!fresh.to_bool());
+    CHECK(!fresh.to_double());
+
+    jsonrefl::value_t json_null;
+    json_null.assign({}, jsonrefl::value_kind::null);
+    jsonrefl::value_t empty_string;
+    empty_string.assign("", jsonrefl::value_kind::string);
+    CHECK(fresh != json_null);
+    CHECK(fresh != empty_string);
+    CHECK(json_null != empty_string);
+    CHECK(json_null.empty());
+    CHECK(empty_string.empty());
+    CHECK(json_null.to_string().empty());
+    CHECK(empty_string.to_string().empty());
+
+    value_fields obj{};
+    const jsonrefl::string_view_t js = R"({"n":null,"s":"","b":true})";
+    auto p = jsonrefl::make_parser(&obj);
+    CHECK(p.parse(js.data(), js.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.n.kind() == jsonrefl::value_kind::null);
+    CHECK(obj.s.kind() == jsonrefl::value_kind::string);
+    CHECK(obj.s.empty());
+    CHECK(obj.b.kind() == jsonrefl::value_kind::boolean);
+    CHECK(obj.z.kind() == jsonrefl::value_kind::unspecified);
+    CHECK(obj.n != obj.z);
+    CHECK(obj.s != obj.n);
+    CHECK(obj.s != obj.z);
+
+    value_fields all_null{};
+    all_null.n.assign({}, jsonrefl::value_kind::null);
+    all_null.s.assign({}, jsonrefl::value_kind::null);
+    all_null.b.assign({}, jsonrefl::value_kind::null);
+    all_null.z.assign({}, jsonrefl::value_kind::null);
+    value_fields all_unspecified{};
+    CHECK_EQ(jsonrefl::to_string(all_unspecified), jsonrefl::to_string(all_null));
+
+    value_fields round{};
+    const auto written = jsonrefl::to_string(all_unspecified);
+    auto p2 = jsonrefl::make_parser(&round);
+    CHECK(p2.parse(written.data(), written.size()).status() == jsonrefl::state::ok);
+    CHECK(round.n.kind() == jsonrefl::value_kind::null);
+    CHECK(round.s.kind() == jsonrefl::value_kind::null);
+    CHECK(round.b.kind() == jsonrefl::value_kind::null);
+    CHECK(round.z.kind() == jsonrefl::value_kind::null);
 
     return true;
 }
@@ -4910,6 +4972,7 @@ int main() {
         && JSONREFL_TEST(test_in_source_sv_cross_chunk_string)
         && JSONREFL_TEST(test_value_t_to_conversions)
         && JSONREFL_TEST(test_value_t_equality)
+        && JSONREFL_TEST(test_value_t_unspecified_distinct_from_null_and_empty_string)
         && JSONREFL_TEST(test_value_t_integer_floating_kinds)
         && JSONREFL_TEST(test_value_t_nonstandard_float_kind)
         && JSONREFL_TEST(test_value_t_parse_and_convert)

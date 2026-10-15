@@ -68,6 +68,7 @@ enum class value_kind: std::uint8_t {
     ,integer = 2
     ,floating = 3
     ,boolean = 4
+    ,unspecified = 5
 };
 
 /*************************************************************************************************/
@@ -297,7 +298,7 @@ parse_floating_sv(string_view_t str) noexcept {
 
 class value_t {
     string_view_t m_sv{};
-    value_kind m_kind{value_kind::null};
+    value_kind m_kind{value_kind::unspecified};
 
 public:
     value_t() = default;
