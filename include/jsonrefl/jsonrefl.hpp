@@ -2185,6 +2185,9 @@ public:
         (void)key;
     }
 
+    // Opening `[` / `{` replaces the container. Elements then append until it closes.
+    virtual void reset_container(void *) const noexcept {}
+
     virtual void* prepare_map_value(void * /*obj*/, string_view_t /*key*/) const { return nullptr; }
     virtual const object_holder_base* get_map_value_metadata() const noexcept { return nullptr; }
     virtual std::size_t value_required_bytes(const void *obj, serialize_flags fl, std::size_t indent) const noexcept = 0;
@@ -2736,6 +2739,30 @@ public:
             ,bool_constant<is_optional_type<T>::value>{}
         );
     }
+
+    template<typename U>
+    static typename std::enable_if<is_optional_type<U>::value>::type
+    reset_member(U &v) noexcept {
+        if ( !v ) { v.emplace(); }
+        reset_value(*v);
+    }
+
+    template<typename U>
+    static typename std::enable_if<!is_optional_type<U>::value>::type
+    reset_member(U &v) noexcept
+    { reset_value(v); }
+
+    template<typename U>
+    static typename std::enable_if<is_object_or_array<U>::value>::type
+    reset_value(U &v) noexcept
+    { v.clear(); }
+
+    template<typename U>
+    static typename std::enable_if<!is_object_or_array<U>::value>::type
+    reset_value(U &) noexcept {}
+
+    void reset_container(void *obj) const noexcept override
+    { reset_member(static_cast<C *>(obj)->*m_ptr); }
 
     void* prepare(void *obj) const override {
         assert(is_array() || is_object());
@@ -3408,6 +3435,14 @@ public:
 
     void* member_address(void *obj) const noexcept override { return obj; }
     const void* member_address(const void *obj) const noexcept override { return const_cast<void*>(obj); }
+
+    void reset_container(void *obj) const noexcept override
+    { root_reset(bool_constant<is_object_or_array<T>::value>{}, obj); }
+
+    static void root_reset(std::true_type, void *obj) noexcept
+    { static_cast<T *>(obj)->clear(); }
+
+    static void root_reset(std::false_type, void *) noexcept {}
 
     void* prepare(void *obj) const override
     { return root_prepare_arr(bool_constant<is_array_type<T>::value>{}, obj); }
@@ -4704,16 +4739,22 @@ class parser {
     { (void)stack_push({std::addressof(metadata<C>()), nullptr, nullptr, m_cls}); }
 
     void enter_object_root_push(std::false_type) {
-        if ( details::is_object_type<C>::value )
-        { (void)stack_push({nullptr, nullptr, details::root_setter_ptr<C>(), m_cls}); }
+        if ( details::is_object_type<C>::value ) {
+            const auto *setter = details::root_setter_ptr<C>();
+            setter->reset_container(m_cls);
+            (void)stack_push({nullptr, nullptr, setter, m_cls});
+        }
     }
 
     void enter_array_root_push(std::true_type)
     { (void)stack_push({std::addressof(metadata<C>()), nullptr, nullptr, m_cls}); }
 
     void enter_array_root_push(std::false_type) {
-        if ( details::is_array_type<C>::value )
-        { (void)stack_push({nullptr, details::root_setter_ptr<C>(), nullptr, m_cls}); }
+        if ( details::is_array_type<C>::value ) {
+            const auto *setter = details::root_setter_ptr<C>();
+            setter->reset_container(m_cls);
+            (void)stack_push({nullptr, setter, nullptr, m_cls});
+        }
     }
 
     void reset_key() noexcept {
@@ -5386,6 +5427,7 @@ class parser {
                 } else {
                     const auto *nested = top.map_setter->get_nested_map_root_setter();
                     if ( !nested ) { return state::invalid; }
+                    nested->reset_container(addr);
                     if ( !stack_push({nullptr, nullptr, nested, addr}) ) { return state::invalid; }
                 }
                 reset_key();
@@ -5393,6 +5435,7 @@ class parser {
                 const auto *setter = top.holder->get(key_sv);
                 if ( !setter ) { return state::invalid; }
                 if ( setter->is_object() && !setter->has_metadata() ) {
+                    setter->reset_container(top.addr);
                     if ( !stack_push({nullptr, nullptr, setter, top.addr}) ) { return state::invalid; }
                 } else {
                     if ( !setter->has_metadata() ) { return state::invalid; }
@@ -5413,6 +5456,7 @@ class parser {
             } else {
                 const auto *nested = top.arr_setter->get_nested_array_root_setter();
                 if ( !nested ) { return state::invalid; }
+                nested->reset_container(elem);
                 if ( !stack_push({nullptr, nested, nullptr, elem}) ) { return state::invalid; }
             }
         }
@@ -5435,12 +5479,14 @@ class parser {
                 if ( !arr_addr ) { return state::invalid; }
                 const auto *arr_root = top.map_setter->get_map_value_array_root_setter();
                 if ( !arr_root ) { return state::invalid; }
+                arr_root->reset_container(arr_addr);
                 if ( !stack_push({nullptr, arr_root, nullptr, arr_addr}) ) { return state::invalid; }
                 reset_key();
                 return state::ok;
             }
             const auto *setter = top.holder->get(current_key(accum));
             if ( !setter || !setter->is_array() ) { return state::invalid; }
+            setter->reset_container(top.addr);
             if ( !stack_push({nullptr, setter, nullptr, top.addr}) ) { return state::invalid; }
             reset_key();
         } else {
@@ -5454,6 +5500,7 @@ class parser {
             } else {
                 const auto *nested = top.arr_setter->get_nested_array_root_setter();
                 if ( !nested ) { return state::invalid; }
+                nested->reset_container(elem);
                 if ( !stack_push({nullptr, nested, nullptr, elem}) ) { return state::invalid; }
             }
         }

@@ -1130,6 +1130,207 @@ bool test_literal_null_opt_vec_default() {
     return true;
 }
 
+bool test_optional_vec_empty_array_engages() {
+    null_arr_test obj{};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"arr":[],"val":1})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK_EQ(obj.val, 1);
+    CHECK(obj.arr.has_value());
+    CHECK(obj.arr->empty());
+
+    return true;
+}
+
+bool test_optional_vec_array_replaces() {
+    null_arr_test obj{};
+    obj.arr = std::vector<int>{1, 2, 3};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"arr":[4,5],"val":2})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.arr.has_value());
+    CHECK((*obj.arr == std::vector<int>{4, 5}));
+
+    obj.arr = std::vector<int>{1, 2, 3};
+    auto p2 = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_1 = R"({"arr":[],"val":2})";
+    CHECK(p2.parse(json_sv_1.data(), json_sv_1.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.arr.has_value());
+    CHECK(obj.arr->empty());
+
+    return true;
+}
+
+bool test_optional_vec_missing_key_keeps() {
+    null_arr_test obj{};
+    obj.arr = std::vector<int>{1, 2, 3};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"val":6})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK_EQ(obj.val, 6);
+    CHECK(obj.arr.has_value());
+    CHECK((*obj.arr == std::vector<int>{1, 2, 3}));
+
+    return true;
+}
+
+bool test_optional_vec_empty_roundtrip() {
+    null_arr_test src{};
+    src.arr = std::vector<int>{};
+    src.val = 4;
+    const auto json = jsonrefl::to_string(src);
+
+    null_arr_test dst{};
+    auto p = jsonrefl::make_parser(&dst);
+    CHECK(p.parse(json.data(), json.size()).status() == jsonrefl::state::ok);
+    CHECK(dst.arr.has_value());
+    CHECK(dst.arr->empty());
+    CHECK_EQ(dst.val, 4);
+
+    return true;
+}
+
+bool test_optional_map_object_replaces() {
+    myns::optional_test_t obj{};
+    obj.opt_map = std::map<std::string, std::string>{{"old", "x"}};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"opt_map":{"k":"v"},"regular":3})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.opt_map.has_value());
+    CHECK_EQ(obj.opt_map->size(), 1u);
+    CHECK_EQ(obj.opt_map->at("k"), std::string("v"));
+    CHECK_EQ(obj.regular, 3);
+
+    obj.opt_map = std::map<std::string, std::string>{{"old", "x"}};
+    auto p2 = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_1 = R"({"opt_map":{},"regular":4})";
+    CHECK(p2.parse(json_sv_1.data(), json_sv_1.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.opt_map.has_value());
+    CHECK(obj.opt_map->empty());
+    CHECK_EQ(obj.regular, 4);
+
+    return true;
+}
+
+bool test_member_vector_array_replaces() {
+    int_array obj{};
+    obj.arr = std::vector<int>{1, 2, 3};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"arr":[9]})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK((obj.arr == std::vector<int>{9}));
+
+    obj.arr = std::vector<int>{1, 2};
+    auto p2 = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_1 = R"({"arr":[]})";
+    CHECK(p2.parse(json_sv_1.data(), json_sv_1.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.arr.empty());
+
+    return true;
+}
+
+bool test_root_vector_array_replaces() {
+    std::vector<int> obj{1, 2, 3};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = "[4,5]";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK((obj == std::vector<int>{4, 5}));
+
+    std::vector<int> empty_src{7};
+    auto p2 = jsonrefl::make_parser(&empty_src);
+    const jsonrefl::string_view_t json_sv_1 = "[]";
+    CHECK(p2.parse(json_sv_1.data(), json_sv_1.size()).status() == jsonrefl::state::ok);
+    CHECK(empty_src.empty());
+
+    return true;
+}
+
+bool test_root_vector_chunk_appends_after_open() {
+    std::vector<int> obj{9, 9};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = "[1,2,";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::incomplete);
+    CHECK((obj == std::vector<int>{1, 2}));
+    const jsonrefl::string_view_t json_sv_1 = "3]";
+    CHECK(p.parse(json_sv_1.data(), json_sv_1.size()).status() == jsonrefl::state::ok);
+    CHECK((obj == std::vector<int>{1, 2, 3}));
+
+    return true;
+}
+
+bool test_root_nested_vector_replaces() {
+    std::vector<std::vector<int>> obj{{1, 2}, {3}};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = "[[9],[],[8,7]]";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK_EQ(obj.size(), 3u);
+    CHECK((obj[0] == std::vector<int>{9}));
+    CHECK(obj[1].empty());
+    CHECK((obj[2] == std::vector<int>{8, 7}));
+
+    return true;
+}
+
+bool test_root_map_object_replaces() {
+    std::map<std::string, int> obj{{"a", 1}, {"b", 2}};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"c":3})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK_EQ(obj.size(), 1u);
+    CHECK_EQ(obj.at("c"), 3);
+
+    obj = std::map<std::string, int>{{"a", 1}};
+    auto p2 = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_1 = "{}";
+    CHECK(p2.parse(json_sv_1.data(), json_sv_1.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.empty());
+
+    return true;
+}
+
+bool test_root_list_array_replaces() {
+    std::list<int> obj{1, 2, 3};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = "[8]";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK((obj == std::list<int>{8}));
+
+    obj = std::list<int>{1};
+    auto p2 = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_1 = "[]";
+    CHECK(p2.parse(json_sv_1.data(), json_sv_1.size()).status() == jsonrefl::state::ok);
+    CHECK(obj.empty());
+
+    return true;
+}
+
+bool test_map_vector_value_replaces() {
+    map_vec_int_t obj{};
+    obj.m["a"] = std::vector<int>{9, 9};
+    obj.m["z"] = std::vector<int>{7};
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"m":{"a":[1,2]}})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK_EQ(obj.m.size(), 1u);
+    CHECK((obj.m.at("a") == std::vector<int>{1, 2}));
+
+    return true;
+}
+
+bool test_member_list_and_umap_replace() {
+    myns::rate_limits_t obj{};
+    obj.codes = std::list<int>{1, 2, 3};
+    obj.extra["old"] = "z";
+    auto p = jsonrefl::make_parser(&obj);
+    const jsonrefl::string_view_t json_sv_0 = R"({"codes":[8,9],"extra":{"c":"d"}})";
+    CHECK(p.parse(json_sv_0.data(), json_sv_0.size()).status() == jsonrefl::state::ok);
+    CHECK((obj.codes == std::list<int>{8, 9}));
+    CHECK_EQ(obj.extra.size(), 1u);
+    CHECK_EQ(obj.extra.at("c"), std::string("d"));
+
+    return true;
+}
+
 /***************************************************************************************************/
 // literal handling chunked
 /***************************************************************************************************/
@@ -4638,6 +4839,19 @@ int main() {
         && JSONREFL_TEST(test_literal_null_opt_default)
         && JSONREFL_TEST(test_literal_null_opt_vec_untouched)
         && JSONREFL_TEST(test_literal_null_opt_vec_default)
+        && JSONREFL_TEST(test_optional_vec_empty_array_engages)
+        && JSONREFL_TEST(test_optional_vec_array_replaces)
+        && JSONREFL_TEST(test_optional_vec_missing_key_keeps)
+        && JSONREFL_TEST(test_optional_vec_empty_roundtrip)
+        && JSONREFL_TEST(test_optional_map_object_replaces)
+        && JSONREFL_TEST(test_member_vector_array_replaces)
+        && JSONREFL_TEST(test_root_vector_array_replaces)
+        && JSONREFL_TEST(test_root_vector_chunk_appends_after_open)
+        && JSONREFL_TEST(test_root_nested_vector_replaces)
+        && JSONREFL_TEST(test_root_map_object_replaces)
+        && JSONREFL_TEST(test_root_list_array_replaces)
+        && JSONREFL_TEST(test_map_vector_value_replaces)
+        && JSONREFL_TEST(test_member_list_and_umap_replace)
         && JSONREFL_TEST(test_literal_true_chunked)
         && JSONREFL_TEST(test_literal_false_chunked)
         && JSONREFL_TEST(test_literal_null_chunked)
